@@ -46,17 +46,83 @@ class Sala(models.Model):
         default=Status.LIVRE,
     )
 
+    motivo_manutencao = models.TextField(blank=True)
+    prazo_estimado = models.DateField(null=True, blank=True)
+
+    tem_projetor = models.BooleanField(default=False)
+    tem_videoconferencia = models.BooleanField(default=False)
+    tem_computadores = models.BooleanField(default=False)
+    tem_televisao = models.BooleanField(default=False)
+    tem_impressora = models.BooleanField(default=False)
+
     def __str__(self):
         return self.nome
 
 
 class Recurso(models.Model):
+    class Tipo(models.TextChoices):
+        MONITOR = 'MONITOR', 'Monitor'
+        COMPUTADOR = 'COMPUTADOR', 'Computador'
+        PROJETOR = 'PROJETOR', 'Projetor'
+        TELEVISAO = 'TELEVISAO', 'Televisão'
+        IMPRESSORA = 'IMPRESSORA', 'Impressora'
+
     sala = models.ForeignKey(Sala, on_delete=models.CASCADE, related_name='recursos')
-    nome = models.CharField(max_length=50)
-    tipo = models.CharField(max_length=50)
+    tipo = models.CharField(max_length=20, choices=Tipo.choices)
+    marca = models.CharField(max_length=100)
+    modelo = models.CharField(max_length=100)
+    numero_serie = models.CharField(max_length=100, unique=True)
+    disponivel = models.BooleanField(default=True)
+
+    especificacoes = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
-        return f'{self.tipo} — {self.nome}'
+        return f'{self.get_tipo_display()} — {self.marca} {self.modelo}'
+
+
+class Monitor(Recurso):
+    class Meta:
+        proxy = True
+
+    def save(self, *args, **kwargs):
+        self.tipo = Recurso.Tipo.MONITOR
+        super().save(*args, **kwargs)
+
+
+class Computador(Recurso):
+    class Meta:
+        proxy = True
+
+    def save(self, *args, **kwargs):
+        self.tipo = Recurso.Tipo.COMPUTADOR
+        super().save(*args, **kwargs)
+
+
+class Projetor(Recurso):
+    class Meta:
+        proxy = True
+
+    def save(self, *args, **kwargs):
+        self.tipo = Recurso.Tipo.PROJETOR
+        super().save(*args, **kwargs)
+
+
+class Televisao(Recurso):
+    class Meta:
+        proxy = True
+
+    def save(self, *args, **kwargs):
+        self.tipo = Recurso.Tipo.TELEVISAO
+        super().save(*args, **kwargs)
+
+
+class Impressora(Recurso):
+    class Meta:
+        proxy = True
+
+    def save(self, *args, **kwargs):
+        self.tipo = Recurso.Tipo.IMPRESSORA
+        super().save(*args, **kwargs)
 
 
 class PostoDeTrabalho(models.Model):
