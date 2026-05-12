@@ -63,7 +63,7 @@ class SalaListSerializer(serializers.ModelSerializer):
             'tem_televisao', 'tem_impressora', 'total_postos', 'postos_disponiveis'
         ]
 
-    def get_postos_disponiveis(self, obj):
+    def get_postos_disponiveis(self, obj) -> int:
         return obj.postos.filter(disponivel=True).count()
 
 
@@ -82,7 +82,7 @@ class SalaDetailSerializer(serializers.ModelSerializer):
             'total_postos', 'postos_disponiveis', 'recursos'
         ]
 
-    def get_postos_disponiveis(self, obj):
+    def get_postos_disponiveis(self, obj) -> int:
         return obj.postos.filter(disponivel=True).count()
 
 

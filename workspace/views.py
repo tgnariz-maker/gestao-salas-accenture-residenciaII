@@ -1,8 +1,9 @@
-from rest_framework import status
+from rest_framework import status, generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.shortcuts import get_object_or_404
+from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from . import selectors, services
 from .models import Sala, PostoDeTrabalho, Reserva
@@ -15,6 +16,10 @@ from .serializers import (
 )
 
 
+@extend_schema_view(
+    get=extend_schema(summary='Lista todos os usuários', responses=UsuarioSerializer),
+    post=extend_schema(summary='Cadastra novo usuário', request=UsuarioCadastroSerializer, responses=UsuarioSerializer),
+)
 class UsuarioListCreateView(APIView):
     def get_permissions(self):
         if self.request.method == 'GET':
@@ -32,6 +37,10 @@ class UsuarioListCreateView(APIView):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
+@extend_schema_view(
+    get=extend_schema(summary='Retorna dados do usuário logado', responses=UsuarioSerializer),
+    patch=extend_schema(summary='Atualiza perfil do usuário logado', request=UsuarioSerializer, responses=UsuarioSerializer),
+)
 class UsuarioMeView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -45,6 +54,10 @@ class UsuarioMeView(APIView):
         return Response(serializer.data)
 
 
+@extend_schema_view(
+    get=extend_schema(summary='Lista salas com filtros', responses=SalaListSerializer),
+    post=extend_schema(summary='Cria nova sala', request=SalaEscritaSerializer, responses=SalaDetailSerializer),
+)
 class SalaListCreateView(APIView):
     permission_classes = [IsAdminOrReadOnly]
 
@@ -65,6 +78,10 @@ class SalaListCreateView(APIView):
         return Response(SalaDetailSerializer(sala).data, status=status.HTTP_201_CREATED)
 
 
+@extend_schema_view(
+    get=extend_schema(summary='Detalha sala específica', responses=SalaDetailSerializer, operation_id='sala_detalhe'),
+    delete=extend_schema(summary='Remove sala', responses={204: None}, operation_id='sala_deletar'),
+)
 class SalaDetailView(APIView):
     permission_classes = [IsAdminOrReadOnly]
 
@@ -79,6 +96,9 @@ class SalaDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+@extend_schema_view(
+    patch=extend_schema(summary='Atualiza status da sala', request=SalaEscritaSerializer, responses=SalaDetailSerializer),
+)
 class SalaStatusView(APIView):
     permission_classes = [IsAdmin]
 
@@ -90,6 +110,9 @@ class SalaStatusView(APIView):
         return Response(SalaDetailSerializer(sala).data)
 
 
+@extend_schema_view(
+    get=extend_schema(summary='Lista postos de uma sala', responses=PostoDeTrabalhoSerializer),
+)
 class PostoListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -100,6 +123,9 @@ class PostoListView(APIView):
         return Response(serializer.data)
 
 
+@extend_schema_view(
+    patch=extend_schema(summary='Bloqueia ou desbloqueia posto', request=PostoDeTrabalhoSerializer, responses=PostoDeTrabalhoSerializer),
+)
 class PostoDetailView(APIView):
     permission_classes = [IsAdmin]
 
@@ -110,6 +136,9 @@ class PostoDetailView(APIView):
         return Response(serializer.data)
 
 
+@extend_schema_view(
+    get=extend_schema(summary='Lista recursos de uma sala', responses=RecursoSerializer),
+)
 class RecursoListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -120,6 +149,10 @@ class RecursoListView(APIView):
         return Response(serializer.data)
 
 
+@extend_schema_view(
+    get=extend_schema(summary='Lista reservas do usuário logado', responses=ReservaLeituraSerializer),
+    post=extend_schema(summary='Cria nova reserva', request=ReservaEscritaSerializer, responses=ReservaLeituraSerializer),
+)
 class ReservaListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -138,8 +171,11 @@ class ReservaListCreateView(APIView):
         return Response(ReservaLeituraSerializer(reserva).data, status=status.HTTP_201_CREATED)
 
 
+@extend_schema_view(
+    delete=extend_schema(summary='Cancela reserva', responses={204: None}),
+)
 class ReservaCancelView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
 
     def delete(self, request, pk):
         reserva = get_object_or_404(Reserva, pk=pk)
@@ -148,6 +184,9 @@ class ReservaCancelView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+@extend_schema_view(
+    get=extend_schema(summary='Histórico de reservas', responses=ReservaLeituraSerializer),
+)
 class ReservaHistoricoView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -160,6 +199,7 @@ class ReservaHistoricoView(APIView):
         return Response(serializer.data)
 
 
+@extend_schema(summary='Verifica status da API', responses={200: None})
 class HealthView(APIView):
     permission_classes = [AllowAny]
 

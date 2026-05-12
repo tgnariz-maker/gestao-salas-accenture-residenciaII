@@ -21,8 +21,8 @@ urlpatterns = [
     path('postos/<int:pk>/', PostoDetailView.as_view(), name='posto-detail'),
 
     path('reservas/', ReservaListCreateView.as_view(), name='reserva-list-create'),
-    path('reservas/<int:pk>/', ReservaCancelView.as_view(), name='reserva-cancel'),
     path('reservas/historico/', ReservaHistoricoView.as_view(), name='reserva-historico'),
+    path('reservas/<int:pk>/', ReservaCancelView.as_view(), name='reserva-cancel'),
 
     path('health/', HealthView.as_view(), name='health'),
 ]
