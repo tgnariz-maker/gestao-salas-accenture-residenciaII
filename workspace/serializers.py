@@ -1,12 +1,30 @@
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
-from .models import Usuario, Sala, Recurso, PostoDeTrabalho, Reserva
+from .models import Usuario, Sala, Recurso, PostoDeTrabalho, Reserva, PerfilProfissional
+
+
+class PerfilProfissionalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PerfilProfissional
+        fields = ['id', 'nome', 'descricao', 'tipos_recurso_necessarios']
+        read_only_fields = ['id']
+
+    def validate_tipos_recurso_necessarios(self, value):
+        tipos_validos = [t[0] for t in PerfilProfissional.TIPOS_RECURSO]
+        invalidos = [t for t in value if t not in tipos_validos]
+        if invalidos:
+            raise serializers.ValidationError(
+                f'Tipos inválidos: {invalidos}. Escolha entre: {tipos_validos}'
+            )
+        return value
 
 
 class UsuarioSerializer(serializers.ModelSerializer):
+    perfil_profissional = PerfilProfissionalSerializer(read_only=True)
+
     class Meta:
         model = Usuario
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'departamento', 'tipo_perfil']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'departamento', 'tipo_perfil', 'perfil_profissional']
         read_only_fields = ['id']
 
 
@@ -15,7 +33,7 @@ class UsuarioCadastroSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Usuario
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'departamento', 'tipo_perfil', 'password']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'departamento', 'tipo_perfil', 'perfil_profissional', 'password']
         read_only_fields = ['id']
 
     def create(self, validated_data):

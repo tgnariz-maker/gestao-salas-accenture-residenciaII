@@ -1,4 +1,4 @@
-from rest_framework import status, generics
+from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -6,14 +6,55 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from . import selectors, services
-from .models import Sala, PostoDeTrabalho, Reserva
+from .models import Sala, PostoDeTrabalho, Reserva, PerfilProfissional
 from .permissions import IsAdmin, IsAdminOrReadOnly, IsOwnerOrAdmin
 from .serializers import (
+    PerfilProfissionalSerializer,
     UsuarioSerializer, UsuarioCadastroSerializer,
     SalaListSerializer, SalaDetailSerializer, SalaEscritaSerializer,
     PostoDeTrabalhoSerializer, RecursoSerializer,
     ReservaLeituraSerializer, ReservaEscritaSerializer,
 )
+
+
+@extend_schema_view(
+    get=extend_schema(summary='Lista perfis profissionais', responses=PerfilProfissionalSerializer),
+    post=extend_schema(summary='Cria perfil profissional', request=PerfilProfissionalSerializer, responses=PerfilProfissionalSerializer),
+)
+class PerfilProfissionalListCreateView(APIView):
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [IsAdmin()]
+
+    def get(self, request):
+        perfis = selectors.get_todos_perfis_profissionais()
+        serializer = PerfilProfissionalSerializer(perfis, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        perfil = services.criar_perfil_profissional(request.data)
+        serializer = PerfilProfissionalSerializer(perfil)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@extend_schema_view(
+    patch=extend_schema(summary='Atualiza perfil profissional', request=PerfilProfissionalSerializer, responses=PerfilProfissionalSerializer),
+    delete=extend_schema(summary='Remove perfil profissional', responses={204: None}),
+)
+class PerfilProfissionalDetailView(APIView):
+    permission_classes = [IsAdmin]
+
+    def patch(self, request, pk):
+        perfil = get_object_or_404(PerfilProfissional, pk=pk)
+        perfil = services.atualizar_perfil_profissional(perfil, request.data)
+        serializer = PerfilProfissionalSerializer(perfil)
+        return Response(serializer.data)
+
+    def delete(self, request, pk):
+        perfil = get_object_or_404(PerfilProfissional, pk=pk)
+        services.deletar_perfil_profissional(perfil)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @extend_schema_view(

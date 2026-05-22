@@ -1,4 +1,12 @@
-from .models import Usuario, Sala, Recurso, PostoDeTrabalho, Reserva
+from .models import Usuario, Sala, Recurso, PostoDeTrabalho, Reserva, PerfilProfissional
+
+
+def get_perfil_profissional_by_id(perfil_id):
+    return PerfilProfissional.objects.get(id=perfil_id)
+
+
+def get_todos_perfis_profissionais():
+    return PerfilProfissional.objects.all().order_by('nome')
 
 
 def get_usuario_by_id(usuario_id):
@@ -6,7 +14,7 @@ def get_usuario_by_id(usuario_id):
 
 
 def get_todos_usuarios():
-    return Usuario.objects.all().order_by('username')
+    return Usuario.objects.all().select_related('perfil_profissional').order_by('username')
 
 
 def get_sala_by_id(sala_id):

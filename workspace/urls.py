@@ -1,5 +1,6 @@
 from django.urls import path
 from .views import (
+    PerfilProfissionalListCreateView, PerfilProfissionalDetailView,
     UsuarioListCreateView, UsuarioMeView,
     SalaListCreateView, SalaDetailView, SalaStatusView,
     PostoListView, PostoDetailView,
@@ -9,6 +10,9 @@ from .views import (
 )
 
 urlpatterns = [
+    path('perfis/', PerfilProfissionalListCreateView.as_view(), name='perfil-list-create'),
+    path('perfis/<int:pk>/', PerfilProfissionalDetailView.as_view(), name='perfil-detail'),
+
     path('usuarios/', UsuarioListCreateView.as_view(), name='usuario-list-create'),
     path('usuarios/me/', UsuarioMeView.as_view(), name='usuario-me'),
 

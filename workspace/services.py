@@ -1,8 +1,28 @@
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.exceptions import ValidationError, PermissionDenied
-from .models import Sala, PostoDeTrabalho, Reserva
+from .models import Sala, PostoDeTrabalho, Reserva, PerfilProfissional
 from . import selectors
+
+
+def criar_perfil_profissional(dados):
+    from .serializers import PerfilProfissionalSerializer
+    serializer = PerfilProfissionalSerializer(data=dados)
+    serializer.is_valid(raise_exception=True)
+    return serializer.save()
+
+
+def atualizar_perfil_profissional(perfil, dados):
+    from .serializers import PerfilProfissionalSerializer
+    serializer = PerfilProfissionalSerializer(perfil, data=dados, partial=True)
+    serializer.is_valid(raise_exception=True)
+    return serializer.save()
+
+
+def deletar_perfil_profissional(perfil):
+    if perfil.usuarios.exists():
+        raise ValidationError('Não é possível remover um perfil vinculado a usuários.')
+    perfil.delete()
 
 
 def criar_usuario(dados):
@@ -13,7 +33,7 @@ def criar_usuario(dados):
 
 
 def atualizar_perfil(usuario, dados):
-    campos_permitidos = ['first_name', 'last_name', 'departamento']
+    campos_permitidos = ['first_name', 'last_name', 'departamento', 'perfil_profissional']
     for campo in campos_permitidos:
         if campo in dados:
             setattr(usuario, campo, dados[campo])
