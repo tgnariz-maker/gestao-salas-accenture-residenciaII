@@ -1,6 +1,5 @@
 from pathlib import Path
 from decouple import config, Csv
-from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -19,7 +18,6 @@ INSTALLED_APPS = [
 
     # Terceiros
     'rest_framework',
-    'rest_framework_simplejwt',
     'corsheaders',
     'drf_spectacular',
 
@@ -79,7 +77,7 @@ AUTH_USER_MODEL = 'workspace.Usuario'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'workspace.authentication.SAMLSessionAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
@@ -88,16 +86,11 @@ REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'workspace.exceptions.custom_exception_handler',
 }
 
-SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(
-        minutes=config('JWT_ACCESS_TOKEN_LIFETIME_MINUTES', default=15, cast=int)
-    ),
-    'REFRESH_TOKEN_LIFETIME': timedelta(
-        days=config('JWT_REFRESH_TOKEN_LIFETIME_DAYS', default=1, cast=int)
-    ),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
-}
+SAML_FOLDER = BASE_DIR / 'saml'
+
+SAML_IDP_URL = config('SAML_IDP_URL', default='http://localhost:8080/realms/growup')
+SAML_ENTITY_ID = config('SAML_ENTITY_ID', default='growup')
+SAML_ACS_URL = config('SAML_ACS_URL', default='http://localhost:8000/api/saml/acs/')
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'GrowUp API',
