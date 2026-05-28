@@ -71,6 +71,9 @@ def atualizar_posto(posto, dados):
 
 
 def criar_reserva(usuario, dados):
+    if not usuario.perfil_profissional:
+        raise ValidationError('Seu usuário não possui perfil profissional. Solicite ao administrador.')
+
     posto_id = dados.get('posto').id if hasattr(dados.get('posto'), 'id') else dados.get('posto')
     inicio = dados.get('data_hora_inicio')
     fim = dados.get('data_hora_fim')

@@ -62,10 +62,7 @@ class PerfilProfissionalDetailView(APIView):
     post=extend_schema(summary='Cadastra novo usuário', request=UsuarioCadastroSerializer, responses=UsuarioSerializer),
 )
 class UsuarioListCreateView(APIView):
-    def get_permissions(self):
-        if self.request.method == 'GET':
-            return [IsAdmin()]
-        return [AllowAny()]
+    permission_classes = [IsAdmin]
 
     def get(self, request):
         usuarios = selectors.get_todos_usuarios()
@@ -174,6 +171,18 @@ class PostoDetailView(APIView):
         posto = get_object_or_404(PostoDeTrabalho, pk=pk)
         posto = services.atualizar_posto(posto, request.data)
         serializer = PostoDeTrabalhoSerializer(posto)
+        return Response(serializer.data)
+
+
+@extend_schema_view(
+    get=extend_schema(summary='Sugestões de postos por perfil profissional', responses=PostoDeTrabalhoSerializer),
+)
+class PostoSugestaoView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        postos = selectors.get_sugestoes_por_perfil(request.user)
+        serializer = PostoDeTrabalhoSerializer(postos, many=True)
         return Response(serializer.data)
 
 

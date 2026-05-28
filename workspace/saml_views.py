@@ -6,7 +6,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from onelogin.saml2.auth import OneLogin_Saml2_Auth
 
-from .models import Usuario
+from .models import Usuario, PerfilProfissional
 from .saml_utils import preparar_request_saml, carregar_configuracao_saml
 
 logger = logging.getLogger('workspace')
@@ -41,11 +41,34 @@ class SAMLACSView(APIView):
             return HttpResponse('Autenticação SAML falhou.', status=401)
 
         username = auth.get_nameid()
+        atributos = auth.get_attributes()
 
         usuario, _ = Usuario.objects.get_or_create(
             username=username,
             defaults={'email': username},
         )
+
+        # Vincula PerfilProfissional automaticamente pelo cargo que vem do SAML
+        # O atributo esperado é 'job_title' — nome do cargo no Keycloak/Entra ID
+        if not usuario.perfil_profissional:
+            job_title = None
+            for chave in ['job_title', 'jobTitle', 'cargo', 'position']:
+                valores = atributos.get(chave, [])
+                if valores:
+                    job_title = valores[0]
+                    break
+
+            if job_title:
+                try:
+                    perfil = PerfilProfissional.objects.get(nome__iexact=job_title)
+                    usuario.perfil_profissional = perfil
+                    usuario.save(update_fields=['perfil_profissional'])
+                    logger.info('Perfil "%s" vinculado ao usuário "%s"', perfil.nome, username)
+                except PerfilProfissional.DoesNotExist:
+                    logger.warning(
+                        'Perfil "%s" não encontrado para o usuário "%s". Vincule manualmente.',
+                        job_title, username
+                    )
 
         login(request, usuario, backend='django.contrib.auth.backends.ModelBackend')
 

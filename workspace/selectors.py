@@ -5,6 +5,10 @@ def get_perfil_profissional_by_id(perfil_id):
     return PerfilProfissional.objects.get(id=perfil_id)
 
 
+def get_perfil_profissional_by_nome(nome):
+    return PerfilProfissional.objects.filter(nome__iexact=nome).first()
+
+
 def get_todos_perfis_profissionais():
     return PerfilProfissional.objects.all().order_by('nome')
 
@@ -55,6 +59,28 @@ def get_posto_by_id(posto_id):
 
 def get_postos_disponiveis_by_sala(sala_id):
     return PostoDeTrabalho.objects.filter(sala_id=sala_id, disponivel=True)
+
+
+def get_sugestoes_por_perfil(usuario):
+    """
+    Retorna postos disponíveis compatíveis com o perfil profissional do usuário.
+    Se o perfil exige COMPUTADOR, filtra postos com tem_maquina=True.
+    Para outros tipos de recurso, a compatibilidade é verificada via recursos da sala.
+    Postos sem máquina são sugeridos para perfis que não exigem COMPUTADOR.
+    """
+    perfil = usuario.perfil_profissional
+    if not perfil:
+        return PostoDeTrabalho.objects.none()
+
+    tipos = perfil.tipos_recurso_necessarios
+    qs = PostoDeTrabalho.objects.filter(disponivel=True).select_related('sala')
+
+    if 'COMPUTADOR' in tipos:
+        qs = qs.filter(tem_maquina=True)
+    else:
+        qs = qs.filter(tem_maquina=False)
+
+    return qs.order_by('sala__nome', 'coord_x', 'coord_y')
 
 
 def get_recursos_by_sala(sala_id):

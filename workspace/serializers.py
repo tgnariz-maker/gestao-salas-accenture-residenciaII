@@ -133,8 +133,8 @@ class SalaEscritaSerializer(serializers.ModelSerializer):
 class PostoDeTrabalhoSerializer(serializers.ModelSerializer):
     class Meta:
         model = PostoDeTrabalho
-        fields = ['id', 'sala', 'coord_x', 'coord_y', 'disponivel']
-        read_only_fields = ['id', 'sala']
+        fields = ['id', 'sala', 'coord_x', 'coord_y', 'disponivel', 'tem_maquina', 'tipo']
+        read_only_fields = ['id', 'sala', 'coord_x', 'coord_y']
 
 
 class ReservaLeituraSerializer(serializers.ModelSerializer):

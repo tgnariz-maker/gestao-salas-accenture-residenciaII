@@ -102,7 +102,6 @@ class Recurso(models.Model):
     modelo = models.CharField(max_length=100)
     numero_serie = models.CharField(max_length=100, unique=True)
     disponivel = models.BooleanField(default=True)
-
     especificacoes = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
@@ -155,10 +154,21 @@ class Impressora(Recurso):
 
 
 class PostoDeTrabalho(models.Model):
+    class Tipo(models.TextChoices):
+        INDIVIDUAL = 'INDIVIDUAL', 'Posto Individual'
+        REUNIAO = 'REUNIAO', 'Sala de Reunião'
+        COLABORATIVO = 'COLABORATIVO', 'Espaço Colaborativo'
+
     sala = models.ForeignKey(Sala, on_delete=models.CASCADE, related_name='postos')
     coord_x = models.IntegerField()
     coord_y = models.IntegerField()
     disponivel = models.BooleanField(default=True)
+    tem_maquina = models.BooleanField(default=True)
+    tipo = models.CharField(
+        max_length=20,
+        choices=Tipo.choices,
+        default=Tipo.INDIVIDUAL,
+    )
 
     def __str__(self):
         return f'Posto ({self.coord_x}, {self.coord_y}) — {self.sala.nome}'
