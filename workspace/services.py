@@ -1,8 +1,13 @@
+import cv2
+import numpy as np
+import logging
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.exceptions import ValidationError, PermissionDenied
 from .models import Sala, PostoDeTrabalho, Reserva, PerfilProfissional
 from . import selectors
+
+logger = logging.getLogger('workspace')
 
 
 def criar_perfil_profissional(dados):
@@ -43,8 +48,7 @@ def atualizar_perfil(usuario, dados):
 
 def criar_sala(dados):
     _validar_manutencao(dados)
-    sala = Sala.objects.create(**dados)
-    return sala
+    return Sala.objects.create(**dados)
 
 
 def atualizar_status_sala(sala, dados):
@@ -66,6 +70,15 @@ def deletar_sala(sala):
 
 def atualizar_posto(posto, dados):
     posto.disponivel = dados.get('disponivel', posto.disponivel)
+    posto.save()
+    return posto
+
+
+def rotular_posto(posto, dados):
+    campos_permitidos = ['tipo', 'tem_maquina', 'disponivel']
+    for campo in campos_permitidos:
+        if campo in dados:
+            setattr(posto, campo, dados[campo])
     posto.save()
     return posto
 
@@ -126,6 +139,101 @@ def cancelar_reserva(reserva, usuario):
     reserva.status = Reserva.Status.CANCELADA
     reserva.save()
     return reserva
+
+
+def processar_planta_baixa(imagem_bytes, sala_id):
+    sala = selectors.get_sala_by_id(sala_id)
+
+    nparr = np.frombuffer(imagem_bytes, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+    if img is None:
+        raise ValidationError('Não foi possível processar a imagem. Verifique o formato do arquivo.')
+
+    h_img, w_img = img.shape[:2]
+    area_imagem = h_img * w_img
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    _, thresh = cv2.threshold(gray, 30, 255, cv2.THRESH_BINARY)
+    contornos, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    candidatos = []
+    contornos_validos = 0
+
+    for c in contornos:
+        area = cv2.contourArea(c)
+        if area > area_imagem * 0.5:
+            continue
+        if 500 <= area <= 2000:
+            x, y, w, h = cv2.boundingRect(c)
+            ratio = w / h if h > 0 else 0
+            if 0.5 <= ratio <= 2.0:
+                perimetro = cv2.arcLength(c, True)
+                approx = cv2.approxPolyDP(c, 0.04 * perimetro, True)
+                contornos_validos += 1
+                if len(approx) == 4:
+                    candidatos.append((x + w // 2, y + h // 2))
+
+    postos_coords = _deduplicar_pontos(candidatos, distancia_min=25)
+
+    postos_coords = [
+        (x, y) for x, y in postos_coords
+        if not (y < 200)
+        and not (x > 1150 and y < 500)
+        and not (x > 1380 and 400 < y < 1000)
+    ]
+
+    if not postos_coords:
+        raise ValidationError(
+            'Nenhum posto de trabalho identificado na imagem. '
+            'Verifique se a imagem é uma planta baixa válida com fundo escuro e linhas claras.'
+        )
+
+    precisao = round((len(postos_coords) / contornos_validos * 100), 1) if contornos_validos > 0 else 0
+    precisao = min(precisao, 100.0)
+
+    postos_criados = []
+    for coord_x, coord_y in postos_coords:
+        posto = PostoDeTrabalho.objects.create(
+            sala=sala,
+            coord_x=coord_x,
+            coord_y=coord_y,
+            disponivel=True,
+            tem_maquina=True,
+            tipo=PostoDeTrabalho.Tipo.INDIVIDUAL,
+        )
+        postos_criados.append(posto)
+
+    logger.info(
+        'Planta processada: sala=%s, postos_detectados=%d, precisao=%.1f%%',
+        sala.nome, len(postos_criados), precisao
+    )
+
+    return {
+        'postos_criados': postos_criados,
+        'total_detectado': len(postos_criados),
+        'precisao_estimada': precisao,
+        'alerta_precisao': precisao < 85,
+    }
+
+
+def _deduplicar_pontos(pontos, distancia_min=25):
+    usados = [False] * len(pontos)
+    resultado = []
+    for i, (x1, y1) in enumerate(pontos):
+        if usados[i]:
+            continue
+        cluster_x, cluster_y, count = x1, y1, 1
+        for j, (x2, y2) in enumerate(pontos):
+            if i != j and not usados[j]:
+                if abs(x1 - x2) < distancia_min and abs(y1 - y2) < distancia_min:
+                    cluster_x += x2
+                    cluster_y += y2
+                    count += 1
+                    usados[j] = True
+        resultado.append((cluster_x // count, cluster_y // count))
+        usados[i] = True
+    return resultado
 
 
 def _validar_manutencao(dados, instance=None):

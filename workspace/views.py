@@ -2,6 +2,7 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.parsers import MultiPartParser
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
@@ -246,6 +247,88 @@ class ReservaHistoricoView(APIView):
         else:
             reservas = selectors.get_historico_by_usuario(request.user.id)
         serializer = ReservaLeituraSerializer(reservas, many=True)
+        return Response(serializer.data)
+
+
+@extend_schema(
+    summary='Processa planta baixa e mapeia postos de trabalho',
+    description='Recebe imagem de planta baixa e sala_id. A IA detecta postos via OpenCV e persiste no banco.',
+    request={
+        'multipart/form-data': {
+            'type': 'object',
+            'properties': {
+                'imagem': {'type': 'string', 'format': 'binary'},
+                'sala_id': {'type': 'integer'},
+            },
+            'required': ['imagem', 'sala_id'],
+        }
+    },
+    responses={201: PostoDeTrabalhoSerializer(many=True)},
+)
+class IAMapearView(APIView):
+    permission_classes = [IsAdmin]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request):
+        imagem = request.FILES.get('imagem')
+        sala_id = request.data.get('sala_id')
+
+        if not imagem:
+            return Response({'erro': 'Campo imagem é obrigatório.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not sala_id:
+            return Response({'erro': 'Campo sala_id é obrigatório.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        imagem_bytes = imagem.read()
+        resultado = services.processar_planta_baixa(imagem_bytes, int(sala_id))
+
+        serializer = PostoDeTrabalhoSerializer(resultado['postos_criados'], many=True)
+
+        resposta = {
+            'postos': serializer.data,
+            'total_detectado': resultado['total_detectado'],
+            'precisao_estimada': resultado['precisao_estimada'],
+        }
+
+        if resultado['alerta_precisao']:
+            resposta['alerta'] = (
+                f'Precisão estimada de {resultado["precisao_estimada"]}% está abaixo de 85%. '
+                'Revise os postos manualmente via PATCH /api/ia/postos/{id}/rotular/.'
+            )
+
+        return Response(resposta, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(
+    summary='Rotula ou ajusta manualmente um posto identificado pela IA',
+    request=PostoDeTrabalhoSerializer,
+    responses={200: PostoDeTrabalhoSerializer},
+)
+class IARotularPostoView(APIView):
+    permission_classes = [IsAdmin]
+
+    def patch(self, request, pk):
+        posto = get_object_or_404(PostoDeTrabalho, pk=pk)
+        posto = services.rotular_posto(posto, request.data)
+        serializer = PostoDeTrabalhoSerializer(posto)
+        return Response(serializer.data)
+
+
+@extend_schema(
+    summary='Edita layout — reposiciona posto manualmente',
+    request=PostoDeTrabalhoSerializer,
+    responses={200: PostoDeTrabalhoSerializer},
+)
+class IAEditarLayoutView(APIView):
+    permission_classes = [IsAdmin]
+
+    def patch(self, request, pk):
+        posto = get_object_or_404(PostoDeTrabalho, pk=pk)
+        campos_permitidos = ['coord_x', 'coord_y', 'tipo', 'tem_maquina', 'disponivel']
+        for campo in campos_permitidos:
+            if campo in request.data:
+                setattr(posto, campo, request.data[campo])
+        posto.save()
+        serializer = PostoDeTrabalhoSerializer(posto)
         return Response(serializer.data)
 
 
