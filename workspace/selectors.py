@@ -1,3 +1,5 @@
+import math
+from django.utils import timezone
 from .models import Usuario, Sala, Recurso, PostoDeTrabalho, Reserva, PerfilProfissional
 
 
@@ -62,12 +64,6 @@ def get_postos_disponiveis_by_sala(sala_id):
 
 
 def get_sugestoes_por_perfil(usuario):
-    """
-    Retorna postos disponíveis compatíveis com o perfil profissional do usuário.
-    Se o perfil exige COMPUTADOR, filtra postos com tem_maquina=True.
-    Para outros tipos de recurso, a compatibilidade é verificada via recursos da sala.
-    Postos sem máquina são sugeridos para perfis que não exigem COMPUTADOR.
-    """
     perfil = usuario.perfil_profissional
     if not perfil:
         return PostoDeTrabalho.objects.none()
@@ -83,16 +79,68 @@ def get_sugestoes_por_perfil(usuario):
     return qs.order_by('sala__nome', 'coord_x', 'coord_y')
 
 
+def get_sugestoes_por_equipe(usuario):
+    """
+    Retorna postos disponíveis compatíveis com o perfil do usuário,
+    ordenados por proximidade espacial aos postos reservados pelos
+    colegas de mesmo departamento nos próximos 7 dias.
+
+    Se não houver colegas com reservas, retorna os postos compatíveis
+    ordenados por coordenada (fallback).
+    """
+    postos_compativeis = list(get_sugestoes_por_perfil(usuario))
+
+    if not postos_compativeis:
+        return PostoDeTrabalho.objects.none()
+
+    if not usuario.departamento:
+        return get_sugestoes_por_perfil(usuario)
+
+    agora = timezone.now()
+    proximos_7_dias = agora + timezone.timedelta(days=7)
+
+    reservas_equipe = Reserva.objects.filter(
+        usuario__departamento=usuario.departamento,
+        status=Reserva.Status.CONFIRMADA,
+        data_hora_inicio__gte=agora,
+        data_hora_inicio__lte=proximos_7_dias,
+    ).exclude(usuario=usuario).select_related('posto')
+
+    if not reservas_equipe.exists():
+        return get_sugestoes_por_perfil(usuario)
+
+    coords_equipe = [
+        (r.posto.coord_x, r.posto.coord_y)
+        for r in reservas_equipe
+    ]
+
+    def distancia_minima(posto):
+        return min(
+            math.sqrt((posto.coord_x - cx) ** 2 + (posto.coord_y - cy) ** 2)
+            for cx, cy in coords_equipe
+        )
+
+    postos_ordenados = sorted(postos_compativeis, key=distancia_minima)
+
+    ids_ordenados = [p.id for p in postos_ordenados]
+    postos_por_id = {p.id: p for p in postos_compativeis}
+    return [postos_por_id[i] for i in ids_ordenados]
+
+
 def get_recursos_by_sala(sala_id):
     return Recurso.objects.filter(sala_id=sala_id)
 
 
 def get_reservas_by_usuario(usuario_id):
-    return Reserva.objects.filter(usuario_id=usuario_id).select_related('posto', 'posto__sala').order_by('-data_hora_inicio')
+    return Reserva.objects.filter(
+        usuario_id=usuario_id
+    ).select_related('posto', 'posto__sala').order_by('-data_hora_inicio')
 
 
 def get_todas_reservas():
-    return Reserva.objects.all().select_related('usuario', 'posto', 'posto__sala').order_by('-data_hora_inicio')
+    return Reserva.objects.all().select_related(
+        'usuario', 'posto', 'posto__sala'
+    ).order_by('-data_hora_inicio')
 
 
 def get_reserva_by_id(reserva_id):

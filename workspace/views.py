@@ -338,3 +338,15 @@ class HealthView(APIView):
 
     def get(self, request):
         return Response({'status': 'ok'})
+
+
+@extend_schema_view(
+    get=extend_schema(summary='Sugestões de postos por proximidade de equipe', responses=PostoDeTrabalhoSerializer),
+)
+class PostoSugestaoEquipeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        postos = selectors.get_sugestoes_por_equipe(request.user)
+        serializer = PostoDeTrabalhoSerializer(postos, many=True)
+        return Response(serializer.data)
