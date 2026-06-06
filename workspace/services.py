@@ -60,12 +60,14 @@ def atualizar_status_sala(sala, dados):
 
 
 def deletar_sala(sala):
-    if sala.reservas.filter(
+    if Reserva.objects.filter(
+        posto__sala=sala,
         status=Reserva.Status.CONFIRMADA,
         data_hora_fim__gte=timezone.now()
     ).exists():
         raise ValidationError('Não é possível remover uma sala com reservas ativas.')
-    sala.delete()
+    sala.ativo = False
+    sala.save(update_fields=['ativo'])
 
 
 def atualizar_posto(posto, dados):

@@ -74,7 +74,7 @@ class Sala(models.Model):
         choices=Status.choices,
         default=Status.LIVRE,
     )
-
+    ativo = models.BooleanField(default=True)
     motivo_manutencao = models.TextField(blank=True)
     prazo_estimado = models.DateField(null=True, blank=True)
 

@@ -24,11 +24,11 @@ def get_todos_usuarios():
 
 
 def get_sala_by_id(sala_id):
-    return Sala.objects.get(id=sala_id)
+    return Sala.objects.get(id=sala_id, ativo=True)
 
 
 def get_todas_salas(filtros=None):
-    qs = Sala.objects.all()
+    qs = Sala.objects.filter(ativo=True)
 
     if not filtros:
         return qs
@@ -66,10 +66,13 @@ def get_postos_disponiveis_by_sala(sala_id):
 def get_sugestoes_por_perfil(usuario):
     perfil = usuario.perfil_profissional
     if not perfil:
-        return PostoDeTrabalho.objects.none()
+        return PostoDeTrabalho.objects.filter(disponivel=True).select_related('sala')
 
     tipos = perfil.tipos_recurso_necessarios
-    qs = PostoDeTrabalho.objects.filter(disponivel=True).select_related('sala')
+    qs = PostoDeTrabalho.objects.filter(disponivel=True, sala__ativo=True).select_related('sala')
+
+    if not tipos:
+        return qs.order_by('sala__nome', 'coord_x', 'coord_y')
 
     if 'COMPUTADOR' in tipos:
         qs = qs.filter(tem_maquina=True)
@@ -80,14 +83,6 @@ def get_sugestoes_por_perfil(usuario):
 
 
 def get_sugestoes_por_equipe(usuario):
-    """
-    Retorna postos disponíveis compatíveis com o perfil do usuário,
-    ordenados por proximidade espacial aos postos reservados pelos
-    colegas de mesmo departamento nos próximos 7 dias.
-
-    Se não houver colegas com reservas, retorna os postos compatíveis
-    ordenados por coordenada (fallback).
-    """
     postos_compativeis = list(get_sugestoes_por_perfil(usuario))
 
     if not postos_compativeis:
@@ -109,10 +104,7 @@ def get_sugestoes_por_equipe(usuario):
     if not reservas_equipe.exists():
         return get_sugestoes_por_perfil(usuario)
 
-    coords_equipe = [
-        (r.posto.coord_x, r.posto.coord_y)
-        for r in reservas_equipe
-    ]
+    coords_equipe = [(r.posto.coord_x, r.posto.coord_y) for r in reservas_equipe]
 
     def distancia_minima(posto):
         return min(
@@ -121,7 +113,6 @@ def get_sugestoes_por_equipe(usuario):
         )
 
     postos_ordenados = sorted(postos_compativeis, key=distancia_minima)
-
     ids_ordenados = [p.id for p in postos_ordenados]
     postos_por_id = {p.id: p for p in postos_compativeis}
     return [postos_por_id[i] for i in ids_ordenados]
