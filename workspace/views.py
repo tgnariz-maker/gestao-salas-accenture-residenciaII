@@ -19,8 +19,8 @@ from .serializers import (
 
 
 @extend_schema_view(
-    get=extend_schema(summary='Lista perfis profissionais', responses=PerfilProfissionalSerializer),
-    post=extend_schema(summary='Cria perfil profissional', request=PerfilProfissionalSerializer, responses=PerfilProfissionalSerializer),
+    get=extend_schema(tags=['perfis'], summary='Lista perfis profissionais', responses=PerfilProfissionalSerializer),
+    post=extend_schema(tags=['perfis'], summary='Cria perfil profissional', request=PerfilProfissionalSerializer, responses=PerfilProfissionalSerializer),
 )
 class PerfilProfissionalListCreateView(APIView):
     def get_permissions(self):
@@ -40,8 +40,8 @@ class PerfilProfissionalListCreateView(APIView):
 
 
 @extend_schema_view(
-    patch=extend_schema(summary='Atualiza perfil profissional', request=PerfilProfissionalSerializer, responses=PerfilProfissionalSerializer),
-    delete=extend_schema(summary='Remove perfil profissional', responses={204: None}),
+    patch=extend_schema(tags=['perfis'], summary='Atualiza perfil profissional', request=PerfilProfissionalSerializer, responses=PerfilProfissionalSerializer),
+    delete=extend_schema(tags=['perfis'], summary='Remove perfil profissional', responses={204: None}),
 )
 class PerfilProfissionalDetailView(APIView):
     permission_classes = [IsAdmin]
@@ -59,8 +59,8 @@ class PerfilProfissionalDetailView(APIView):
 
 
 @extend_schema_view(
-    get=extend_schema(summary='Lista todos os usuários', responses=UsuarioSerializer),
-    post=extend_schema(summary='Cadastra novo usuário', request=UsuarioCadastroSerializer, responses=UsuarioSerializer),
+    get=extend_schema(tags=['usuarios'], summary='Lista todos os usuários', responses=UsuarioSerializer),
+    post=extend_schema(tags=['usuarios'], summary='Cadastra novo usuário', request=UsuarioCadastroSerializer, responses=UsuarioSerializer),
 )
 class UsuarioListCreateView(APIView):
     permission_classes = [IsAdmin]
@@ -77,8 +77,8 @@ class UsuarioListCreateView(APIView):
 
 
 @extend_schema_view(
-    get=extend_schema(summary='Retorna dados do usuário logado', responses=UsuarioSerializer),
-    patch=extend_schema(summary='Atualiza perfil do usuário logado', request=UsuarioSerializer, responses=UsuarioSerializer),
+    get=extend_schema(tags=['usuarios'], summary='Retorna dados do usuário logado', responses=UsuarioSerializer),
+    patch=extend_schema(tags=['usuarios'], summary='Atualiza perfil do usuário logado', request=UsuarioSerializer, responses=UsuarioSerializer),
 )
 class UsuarioMeView(APIView):
     permission_classes = [IsAuthenticated]
@@ -94,8 +94,8 @@ class UsuarioMeView(APIView):
 
 
 @extend_schema_view(
-    get=extend_schema(summary='Lista salas com filtros', responses=SalaListSerializer),
-    post=extend_schema(summary='Cria nova sala', request=SalaEscritaSerializer, responses=SalaDetailSerializer),
+    get=extend_schema(tags=['salas'], summary='Lista salas com filtros', responses=SalaListSerializer),
+    post=extend_schema(tags=['salas'], summary='Cria nova sala', request=SalaEscritaSerializer, responses=SalaDetailSerializer),
 )
 class SalaListCreateView(APIView):
     permission_classes = [IsAdminOrReadOnly]
@@ -118,8 +118,8 @@ class SalaListCreateView(APIView):
 
 
 @extend_schema_view(
-    get=extend_schema(summary='Detalha sala específica', responses=SalaDetailSerializer, operation_id='sala_detalhe'),
-    delete=extend_schema(summary='Remove sala', responses={204: None}, operation_id='sala_deletar'),
+    get=extend_schema(tags=['salas'], summary='Detalha sala específica', responses=SalaDetailSerializer, operation_id='sala_detalhe'),
+    delete=extend_schema(tags=['salas'], summary='Remove sala', responses={204: None}, operation_id='sala_deletar'),
 )
 class SalaDetailView(APIView):
     permission_classes = [IsAdminOrReadOnly]
@@ -136,7 +136,7 @@ class SalaDetailView(APIView):
 
 
 @extend_schema_view(
-    patch=extend_schema(summary='Atualiza status da sala', request=SalaEscritaSerializer, responses=SalaDetailSerializer),
+    patch=extend_schema(tags=['salas'], summary='Atualiza status da sala', request=SalaEscritaSerializer, responses=SalaDetailSerializer),
 )
 class SalaStatusView(APIView):
     permission_classes = [IsAdmin]
@@ -150,7 +150,7 @@ class SalaStatusView(APIView):
 
 
 @extend_schema_view(
-    get=extend_schema(summary='Lista postos de uma sala', responses=PostoDeTrabalhoSerializer),
+    get=extend_schema(tags=['posicoes'], summary='Lista posições de uma sala', responses=PostoDeTrabalhoSerializer),
 )
 class PostoListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -163,7 +163,7 @@ class PostoListView(APIView):
 
 
 @extend_schema_view(
-    patch=extend_schema(summary='Bloqueia ou desbloqueia posto', request=PostoDeTrabalhoSerializer, responses=PostoDeTrabalhoSerializer),
+    patch=extend_schema(tags=['posicoes'], summary='Bloqueia ou desbloqueia posição', request=PostoDeTrabalhoSerializer, responses=PostoDeTrabalhoSerializer),
 )
 class PostoDetailView(APIView):
     permission_classes = [IsAdmin]
@@ -176,7 +176,7 @@ class PostoDetailView(APIView):
 
 
 @extend_schema_view(
-    get=extend_schema(summary='Sugestões de postos por perfil profissional', responses=PostoDeTrabalhoSerializer),
+    get=extend_schema(tags=['posicoes'], summary='Sugestões de posições por perfil profissional', responses=PostoDeTrabalhoSerializer),
 )
 class PostoSugestaoView(APIView):
     permission_classes = [IsAuthenticated]
@@ -188,7 +188,19 @@ class PostoSugestaoView(APIView):
 
 
 @extend_schema_view(
-    get=extend_schema(summary='Lista recursos de uma sala', responses=RecursoSerializer),
+    get=extend_schema(tags=['posicoes'], summary='Sugestões de posições por proximidade de equipe', responses=PostoDeTrabalhoSerializer),
+)
+class PostoSugestaoEquipeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        postos = selectors.get_sugestoes_por_equipe(request.user)
+        serializer = PostoDeTrabalhoSerializer(postos, many=True)
+        return Response(serializer.data)
+
+
+@extend_schema_view(
+    get=extend_schema(tags=['salas'], summary='Lista recursos de uma sala', responses=RecursoSerializer),
 )
 class RecursoListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -201,8 +213,8 @@ class RecursoListView(APIView):
 
 
 @extend_schema_view(
-    get=extend_schema(summary='Lista reservas do usuário logado', responses=ReservaLeituraSerializer),
-    post=extend_schema(summary='Cria nova reserva', request=ReservaEscritaSerializer, responses=ReservaLeituraSerializer),
+    get=extend_schema(tags=['reservas'], summary='Lista reservas do usuário logado', responses=ReservaLeituraSerializer),
+    post=extend_schema(tags=['reservas'], summary='Cria nova reserva', request=ReservaEscritaSerializer, responses=ReservaLeituraSerializer),
 )
 class ReservaListCreateView(APIView):
     permission_classes = [IsAuthenticated]
@@ -223,7 +235,7 @@ class ReservaListCreateView(APIView):
 
 
 @extend_schema_view(
-    delete=extend_schema(summary='Cancela reserva', responses={204: None}),
+    delete=extend_schema(tags=['reservas'], summary='Cancela reserva', responses={204: None}),
 )
 class ReservaCancelView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerOrAdmin]
@@ -236,7 +248,7 @@ class ReservaCancelView(APIView):
 
 
 @extend_schema_view(
-    get=extend_schema(summary='Histórico de reservas', responses=ReservaLeituraSerializer),
+    get=extend_schema(tags=['reservas'], summary='Histórico de reservas', responses=ReservaLeituraSerializer),
 )
 class ReservaHistoricoView(APIView):
     permission_classes = [IsAuthenticated]
@@ -251,8 +263,9 @@ class ReservaHistoricoView(APIView):
 
 
 @extend_schema(
-    summary='Processa planta baixa e mapeia postos de trabalho',
-    description='Recebe imagem de planta baixa e sala_id. A IA detecta postos via OpenCV e persiste no banco.',
+    tags=['ia'],
+    summary='Processa planta baixa e mapeia posições de trabalho',
+    description='Recebe imagem de planta baixa e sala_id. A IA detecta posições via OpenCV e persiste no banco.',
     request={
         'multipart/form-data': {
             'type': 'object',
@@ -292,14 +305,15 @@ class IAMapearView(APIView):
         if resultado['alerta_precisao']:
             resposta['alerta'] = (
                 f'Precisão estimada de {resultado["precisao_estimada"]}% está abaixo de 85%. '
-                'Revise os postos manualmente via PATCH /api/ia/postos/{id}/rotular/.'
+                'Revise os postos manualmente via PATCH /api/v1/ia/posicoes/{id}/rotular/.'
             )
 
         return Response(resposta, status=status.HTTP_201_CREATED)
 
 
 @extend_schema(
-    summary='Rotula ou ajusta manualmente um posto identificado pela IA',
+    tags=['ia'],
+    summary='Rotula ou ajusta manualmente uma posição identificada pela IA',
     request=PostoDeTrabalhoSerializer,
     responses={200: PostoDeTrabalhoSerializer},
 )
@@ -314,7 +328,8 @@ class IARotularPostoView(APIView):
 
 
 @extend_schema(
-    summary='Edita layout — reposiciona posto manualmente',
+    tags=['ia'],
+    summary='Edita layout — reposiciona posição manualmente',
     request=PostoDeTrabalhoSerializer,
     responses={200: PostoDeTrabalhoSerializer},
 )
@@ -332,21 +347,9 @@ class IAEditarLayoutView(APIView):
         return Response(serializer.data)
 
 
-@extend_schema(summary='Verifica status da API', responses={200: None})
+@extend_schema(tags=['sistema'], summary='Verifica status da API', responses={200: None})
 class HealthView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
         return Response({'status': 'ok'})
-
-
-@extend_schema_view(
-    get=extend_schema(summary='Sugestões de postos por proximidade de equipe', responses=PostoDeTrabalhoSerializer),
-)
-class PostoSugestaoEquipeView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        postos = selectors.get_sugestoes_por_equipe(request.user)
-        serializer = PostoDeTrabalhoSerializer(postos, many=True)
-        return Response(serializer.data)

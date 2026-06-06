@@ -26,6 +26,7 @@ services:
       KC_DB_URL: jdbc:postgresql://db:5432/${DB_NAME}
       KC_DB_USERNAME: ${DB_USER}
       KC_DB_PASSWORD: ${DB_PASSWORD}
+      KC_FEATURES: token-exchange
     ports:
       - "8080:8080"
       - "9000:9000"

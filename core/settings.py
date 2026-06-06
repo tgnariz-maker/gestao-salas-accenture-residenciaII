@@ -15,13 +15,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.postgres',
-
-    # Terceiros
     'rest_framework',
     'corsheaders',
     'drf_spectacular',
-
-    # Projeto
     'workspace',
 ]
 
@@ -66,6 +62,12 @@ DATABASES = {
     }
 }
 
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    }
+}
+
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -77,7 +79,7 @@ AUTH_USER_MODEL = 'workspace.Usuario'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'workspace.authentication.SAMLSessionAuthentication',
+        'workspace.authentication.KeycloakBearerAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
@@ -92,11 +94,40 @@ SAML_IDP_URL = config('SAML_IDP_URL', default='http://localhost:8080/realms/grow
 SAML_ENTITY_ID = config('SAML_ENTITY_ID', default='growup')
 SAML_ACS_URL = config('SAML_ACS_URL', default='http://localhost:8000/api/saml/acs/')
 
+KEYCLOAK_JWKS_URL = config(
+    'KEYCLOAK_JWKS_URL',
+    default='http://localhost:8080/realms/growup/protocol/openid-connect/certs',
+)
+KEYCLOAK_INTERNAL_URL = config(
+    'KEYCLOAK_INTERNAL_URL',
+    default='http://keycloak:8080/realms/growup',
+)
+KEYCLOAK_JWKS_URL_INTERNAL = config(
+    'KEYCLOAK_JWKS_URL_INTERNAL',
+    default='http://keycloak:8080/realms/growup/protocol/openid-connect/certs',
+)
+KEYCLOAK_OIDC_CLIENT_ID = config('KEYCLOAK_OIDC_CLIENT_ID', default='growup-api')
+KEYCLOAK_OIDC_CLIENT_SECRET = config('KEYCLOAK_OIDC_CLIENT_SECRET', default='')
+KEYCLOAK_USERS_PASSWORD = config('KEYCLOAK_USERS_PASSWORD', default='')
+
 SPECTACULAR_SETTINGS = {
     'TITLE': 'GrowUp API',
     'DESCRIPTION': 'API de gestão de espaços corporativos — Squad 25 Accenture/UNIT',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    'SECURITY': [{'BearerAuth': []}],
+    'SWAGGER_UI_SETTINGS': {
+        'persistAuthorization': True,
+    },
+    'APPEND_COMPONENTS': {
+        'securitySchemes': {
+            'BearerAuth': {
+                'type': 'http',
+                'scheme': 'bearer',
+                'bearerFormat': 'JWT',
+            }
+        }
+    },
     'ENUM_NAME_OVERRIDES': {
         'SalaStatusEnum': 'workspace.models.Sala.Status',
         'ReservaStatusEnum': 'workspace.models.Reserva.Status',

@@ -1,15 +1,44 @@
 import logging
+import requests
 from django.http import HttpResponseRedirect, HttpResponse
-from django.contrib.auth import login
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from onelogin.saml2.auth import OneLogin_Saml2_Auth
+from django.conf import settings
 
 from .models import Usuario, PerfilProfissional
 from .saml_utils import preparar_request_saml, carregar_configuracao_saml
 
 logger = logging.getLogger('workspace')
+
+
+def _obter_token_keycloak(username):
+    token_url = f'{settings.KEYCLOAK_INTERNAL_URL}/protocol/openid-connect/token'
+
+    response = requests.post(
+        token_url,
+        data={
+            'client_id': settings.KEYCLOAK_OIDC_CLIENT_ID,
+            'client_secret': settings.KEYCLOAK_OIDC_CLIENT_SECRET,
+            'grant_type': 'password',
+            'username': username,
+            'password': settings.KEYCLOAK_USERS_PASSWORD,
+            'scope': 'openid profile email',
+        },
+        timeout=10,
+    )
+
+    if response.status_code != 200:
+        logger.error(
+            'Falha ao obter token para "%s": %s — %s',
+            username,
+            response.status_code,
+            response.text,
+        )
+        return None
+
+    return response.json()
 
 
 class SAMLLoginView(APIView):
@@ -48,8 +77,6 @@ class SAMLACSView(APIView):
             defaults={'email': username},
         )
 
-        # Vincula PerfilProfissional automaticamente pelo cargo que vem do SAML
-        # O atributo esperado é 'job_title' — nome do cargo no Keycloak/Entra ID
         if not usuario.perfil_profissional:
             job_title = None
             for chave in ['job_title', 'jobTitle', 'cargo', 'position']:
@@ -67,12 +94,24 @@ class SAMLACSView(APIView):
                 except PerfilProfissional.DoesNotExist:
                     logger.warning(
                         'Perfil "%s" não encontrado para o usuário "%s". Vincule manualmente.',
-                        job_title, username
+                        job_title, username,
                     )
 
-        login(request, usuario, backend='django.contrib.auth.backends.ModelBackend')
+        token_data = _obter_token_keycloak(username)
 
-        request.session['saml_authenticated'] = True
-        request.session['saml_username'] = username
+        if not token_data:
+            logger.error('Não foi possível emitir token para "%s".', username)
+            return Response(
+                {'erro': 'Login SAML realizado, mas falha ao emitir token de acesso.'},
+                status=502,
+            )
 
-        return Response({'mensagem': 'Login realizado com sucesso.', 'usuario': username})
+        logger.info('Login SAML concluído para "%s"', username)
+
+        return Response({
+            'mensagem': 'Login realizado com sucesso.',
+            'usuario': username,
+            'access_token': token_data.get('access_token'),
+            'expires_in': token_data.get('expires_in'),
+            'token_type': token_data.get('token_type', 'Bearer'),
+        })

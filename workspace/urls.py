@@ -22,18 +22,18 @@ urlpatterns = [
     path('salas/', SalaListCreateView.as_view(), name='salas-list-create'),
     path('salas/<int:pk>/', SalaDetailView.as_view(), name='salas-detail'),
     path('salas/<int:pk>/status/', SalaStatusView.as_view(), name='salas-status'),
-    path('salas/<int:pk>/postos/', PostoListView.as_view(), name='postos-list'),
+    path('salas/<int:pk>/posicoes/', PostoListView.as_view(), name='posicoes-list'),
     path('salas/<int:pk>/recursos/', RecursoListView.as_view(), name='recursos-list'),
 
-    path('postos/sugestoes/', PostoSugestaoView.as_view(), name='postos-sugestoes'),
-    path('postos/sugestoes/equipe/', PostoSugestaoEquipeView.as_view(), name='postos-sugestoes-equipe'),
-    path('postos/<int:pk>/', PostoDetailView.as_view(), name='postos-detail'),
+    path('posicoes/sugestoes/', PostoSugestaoView.as_view(), name='posicoes-sugestoes'),
+    path('posicoes/sugestoes/equipe/', PostoSugestaoEquipeView.as_view(), name='posicoes-sugestoes-equipe'),
+    path('posicoes/<int:pk>/', PostoDetailView.as_view(), name='posicoes-detail'),
 
     path('reservas/', ReservaListCreateView.as_view(), name='reservas-list-create'),
     path('reservas/historico/', ReservaHistoricoView.as_view(), name='reservas-historico'),
     path('reservas/<int:pk>/', ReservaCancelView.as_view(), name='reservas-cancel'),
 
     path('ia/mapear/', IAMapearView.as_view(), name='ia-mapear'),
-    path('ia/postos/<int:pk>/rotular/', IARotularPostoView.as_view(), name='ia-rotular-posto'),
+    path('ia/posicoes/<int:pk>/rotular/', IARotularPostoView.as_view(), name='ia-rotular-posicao'),
     path('ia/layout/<int:pk>/editar/', IAEditarLayoutView.as_view(), name='ia-editar-layout'),
 ]
