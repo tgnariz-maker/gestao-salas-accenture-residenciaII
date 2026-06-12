@@ -1,4 +1,5 @@
 import math
+from datetime import datetime, date, time
 from django.utils import timezone
 from .models import Usuario, Sala, Recurso, PostoDeTrabalho, Reserva, PerfilProfissional, Equipe
 
@@ -63,16 +64,52 @@ def get_postos_disponiveis_by_sala(sala_id):
     return PostoDeTrabalho.objects.filter(sala_id=sala_id, disponivel=True)
 
 
+def get_disponibilidade_sala(sala_id, data):
+    sala = get_sala_by_id(sala_id)
+
+    inicio_dia = timezone.make_aware(datetime.combine(data, time.min))
+    fim_dia = timezone.make_aware(datetime.combine(data, time.max))
+
+    postos_reservados_ids = Reserva.objects.filter(
+        posto__sala=sala,
+        status=Reserva.Status.CONFIRMADA,
+        data_hora_inicio__lt=fim_dia,
+        data_hora_fim__gt=inicio_dia,
+    ).values_list('posto_id', flat=True)
+
+    todos_postos = PostoDeTrabalho.objects.filter(sala=sala)
+    postos_livres = todos_postos.exclude(id__in=postos_reservados_ids).filter(disponivel=True)
+    postos_ocupados = todos_postos.filter(id__in=postos_reservados_ids)
+
+    try:
+        config = sala.configuracao
+        dia_semana = data.weekday()
+        sala_aberta = (
+            dia_semana in config.dias_funcionamento
+            and data not in config.feriados
+        )
+    except Exception:
+        sala_aberta = sala.status != Sala.Status.MANUTENCAO
+
+    return {
+        'sala_id': sala.id,
+        'sala_nome': sala.nome,
+        'data': data.isoformat(),
+        'sala_aberta': sala_aberta,
+        'total_postos': todos_postos.count(),
+        'postos_livres': postos_livres.count(),
+        'postos_ocupados': postos_ocupados.count(),
+    }
+
+
 def get_sugestoes_por_perfil(usuario):
     perfil = usuario.perfil_profissional
-    if not perfil:
-        return PostoDeTrabalho.objects.filter(disponivel=True).select_related('sala')
-
-    tipos = perfil.tipos_recurso_necessarios
     qs = PostoDeTrabalho.objects.filter(disponivel=True, sala__ativo=True).select_related('sala')
 
-    if not tipos:
+    if not perfil or not perfil.tipos_recurso_necessarios:
         return qs.order_by('sala__nome', 'coord_x', 'coord_y')
+
+    tipos = perfil.tipos_recurso_necessarios
 
     if 'COMPUTADOR' in tipos:
         qs = qs.filter(tem_maquina=True)
@@ -116,11 +153,9 @@ def get_sugestoes_por_equipe(usuario, equipe_id):
         return True
 
     def score_posto(posto):
-        membros_atendidos = sum(1 for m in membros if posto_atende_membro(posto, m))
-        return membros_atendidos
+        return sum(1 for m in membros if posto_atende_membro(posto, m))
 
     postos_com_score = sorted(postos_disponiveis, key=score_posto, reverse=True)
-
     melhor_score = score_posto(postos_com_score[0]) if postos_com_score else 0
     postos_filtrados = [p for p in postos_com_score if score_posto(p) == melhor_score]
 

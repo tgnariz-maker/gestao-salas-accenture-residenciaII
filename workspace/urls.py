@@ -3,6 +3,7 @@ from .views import (
     PerfilProfissionalListCreateView, PerfilProfissionalDetailView,
     UsuarioListCreateView, UsuarioMeView,
     SalaListCreateView, SalaDetailView, SalaStatusView,
+    SalaDisponibilidadeView, SalaConfiguracaoView,
     PostoListView, PostoDetailView, PostoSugestaoView, PostoSugestaoEquipeView,
     RecursoListView,
     ReservaListCreateView, ReservaCancelView, ReservaHistoricoView,
@@ -29,6 +30,8 @@ urlpatterns = [
     path('salas/<int:pk>/status/', SalaStatusView.as_view(), name='salas-status'),
     path('salas/<int:pk>/posicoes/', PostoListView.as_view(), name='posicoes-list'),
     path('salas/<int:pk>/recursos/', RecursoListView.as_view(), name='recursos-list'),
+    path('salas/<int:pk>/disponibilidade/', SalaDisponibilidadeView.as_view(), name='salas-disponibilidade'),
+    path('salas/<int:pk>/configuracao/', SalaConfiguracaoView.as_view(), name='salas-configuracao'),
     path('salas/<int:pk>/layout-preview/', IALayoutPreviewView.as_view(), name='ia-layout-preview'),
     path('salas/<int:pk>/layout/', IALayoutConfirmarView.as_view(), name='ia-layout-confirmar'),
 

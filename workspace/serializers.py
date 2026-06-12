@@ -1,6 +1,29 @@
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
-from .models import Usuario, Sala, Recurso, PostoDeTrabalho, Reserva, PerfilProfissional, Equipe
+from .models import Usuario, Sala, Recurso, PostoDeTrabalho, Reserva, PerfilProfissional, Equipe, ConfiguracaoSala
+
+
+class ConfiguracaoSalaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ConfiguracaoSala
+        fields = [
+            'id', 'sala', 'dias_funcionamento', 'hora_abertura',
+            'hora_fechamento', 'antecedencia_minima_minutos', 'feriados',
+        ]
+        read_only_fields = ['id', 'sala']
+
+    def validate_dias_funcionamento(self, value):
+        invalidos = [d for d in value if d not in range(7)]
+        if invalidos:
+            raise serializers.ValidationError('Dias válidos: 0 (Segunda) a 6 (Domingo).')
+        return value
+
+    def validate(self, data):
+        abertura = data.get('hora_abertura')
+        fechamento = data.get('hora_fechamento')
+        if abertura and fechamento and fechamento <= abertura:
+            raise serializers.ValidationError({'hora_fechamento': 'Deve ser posterior à hora de abertura.'})
+        return data
 
 
 class PerfilProfissionalSerializer(serializers.ModelSerializer):

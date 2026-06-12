@@ -15,7 +15,7 @@ from .serializers import (
     SalaListSerializer, SalaDetailSerializer, SalaEscritaSerializer,
     PostoDeTrabalhoSerializer, RecursoSerializer,
     ReservaLeituraSerializer, ReservaEscritaSerializer,
-    EquipeSerializer,
+    EquipeSerializer, ConfiguracaoSalaSerializer,
 )
 
 
@@ -472,3 +472,72 @@ class EquipeDetailView(APIView):
         equipe = get_object_or_404(Equipe, pk=pk)
         equipe.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@extend_schema(
+    tags=['salas'],
+    summary='Consulta disponibilidade de posições por data',
+    parameters=[
+        {
+            'name': 'data',
+            'in': 'query',
+            'required': True,
+            'schema': {'type': 'string', 'format': 'date'},
+            'description': 'Data no formato YYYY-MM-DD',
+        }
+    ],
+    responses={200: {'type': 'object'}},
+)
+class SalaDisponibilidadeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        data_str = request.query_params.get('data')
+        if not data_str:
+            return Response(
+                {'erro': 'Parâmetro data é obrigatório. Formato: YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            from datetime import date
+            data = date.fromisoformat(data_str)
+        except ValueError:
+            return Response(
+                {'erro': 'Formato de data inválido. Use YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        resultado = selectors.get_disponibilidade_sala(pk, data)
+        return Response(resultado)
+
+
+@extend_schema_view(
+    get=extend_schema(tags=['salas'], summary='Consulta configuração da sala', responses=ConfiguracaoSalaSerializer),
+    put=extend_schema(tags=['salas'], summary='Cria ou atualiza configuração da sala', request=ConfiguracaoSalaSerializer, responses=ConfiguracaoSalaSerializer),
+)
+class SalaConfiguracaoView(APIView):
+    permission_classes = [IsAdmin]
+
+    def get(self, request, pk):
+        sala = get_object_or_404(Sala, pk=pk, ativo=True)
+        try:
+            config = sala.configuracao
+            serializer = ConfiguracaoSalaSerializer(config)
+            return Response(serializer.data)
+        except Exception:
+            return Response(
+                {'mensagem': 'Configuração não definida. Use PUT para criar.'},
+                status=status.HTTP_200_OK,
+            )
+
+    def put(self, request, pk):
+        sala = get_object_or_404(Sala, pk=pk, ativo=True)
+        try:
+            config = sala.configuracao
+            serializer = ConfiguracaoSalaSerializer(config, data=request.data, partial=True)
+        except Exception:
+            serializer = ConfiguracaoSalaSerializer(data=request.data)
+
+        serializer.is_valid(raise_exception=True)
+        config = serializer.save(sala=sala)
+        return Response(ConfiguracaoSalaSerializer(config).data)

@@ -59,6 +59,43 @@ class Usuario(AbstractUser):
         return self.username
 
 
+class ConfiguracaoSala(models.Model):
+    DIAS_SEMANA = [
+        (0, 'Segunda'),
+        (1, 'Terça'),
+        (2, 'Quarta'),
+        (3, 'Quinta'),
+        (4, 'Sexta'),
+        (5, 'Sábado'),
+        (6, 'Domingo'),
+    ]
+
+    sala = models.OneToOneField(
+        'Sala',
+        on_delete=models.CASCADE,
+        related_name='configuracao',
+    )
+    dias_funcionamento = ArrayField(
+        models.IntegerField(choices=DIAS_SEMANA),
+        default=list,
+        help_text='Dias da semana em que a sala funciona (0=Segunda, 6=Domingo)',
+    )
+    hora_abertura = models.TimeField(default='08:00')
+    hora_fechamento = models.TimeField(default='18:00')
+    antecedencia_minima_minutos = models.IntegerField(
+        default=30,
+        validators=[MinValueValidator(0)],
+    )
+    feriados = ArrayField(
+        models.DateField(),
+        default=list,
+        blank=True,
+    )
+
+    def __str__(self):
+        return f'Configuração — {self.sala.nome}'
+
+
 class Sala(models.Model):
     class Status(models.TextChoices):
         LIVRE = 'LIVRE', 'Livre'
