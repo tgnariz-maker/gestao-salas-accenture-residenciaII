@@ -167,53 +167,43 @@ def processar_planta_baixa(imagem_bytes, sala_id):
         raise ValidationError('Não foi possível processar a imagem. Verifique o formato do arquivo.')
 
     h_img, w_img = img.shape[:2]
-    area_imagem = h_img * w_img
-
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    _, thresh = cv2.threshold(gray, 30, 255, cv2.THRESH_BINARY)
-    contornos, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
-    candidatos = []
-    contornos_validos = 0
+    media_brilho = np.mean(gray)
+    if media_brilho > 127:
+        gray = cv2.bitwise_not(gray)
 
-    for c in contornos:
-        area = cv2.contourArea(c)
-        if area > area_imagem * 0.5:
-            continue
-        if 500 <= area <= 2000:
-            x, y, w, h = cv2.boundingRect(c)
-            ratio = w / h if h > 0 else 0
-            if 0.5 <= ratio <= 2.0:
-                perimetro = cv2.arcLength(c, True)
-                approx = cv2.approxPolyDP(c, 0.04 * perimetro, True)
-                contornos_validos += 1
-                if len(approx) == 4:
-                    candidatos.append((x + w // 2, y + h // 2))
+    margem_borda = int(min(h_img, w_img) * 0.04)
 
-    postos_coords = _deduplicar_pontos(candidatos, distancia_min=25)
+    candidatos_tm = _detectar_por_template(gray, h_img, w_img)
+    candidatos_canny = _detectar_por_canny(gray, h_img, w_img)
+
+    todos_coords = [(x, y) for x, y, _ in candidatos_tm] + candidatos_canny
+    distancia_dedup = max(20, int(min(h_img, w_img) * 0.018))
+    postos_coords = _deduplicar_pontos(todos_coords, distancia_min=distancia_dedup)
 
     postos_coords = [
         (x, y) for x, y in postos_coords
-        if not (y < 200)
-        and not (x > 1150 and y < 500)
-        and not (x > 1380 and 400 < y < 1000)
+        if margem_borda < x < w_img - margem_borda
+        and margem_borda < y < h_img - margem_borda
     ]
 
     if not postos_coords:
         raise ValidationError(
             'Nenhum posto de trabalho identificado na imagem. '
-            'Verifique se a imagem é uma planta baixa válida com fundo escuro e linhas claras.'
+            'Verifique se a imagem é uma planta baixa válida.'
         )
 
-    precisao = round((len(postos_coords) / contornos_validos * 100), 1) if contornos_validos > 0 else 0
-    precisao = min(precisao, 100.0)
+    scores_tm = [s for _, _, s in candidatos_tm]
+    confianca_media = round(float(np.mean(scores_tm)) * 100, 1) if scores_tm else 0.0
+    confianca_media = min(confianca_media, 100.0)
 
     postos_criados = []
     for coord_x, coord_y in postos_coords:
         posto = PostoDeTrabalho.objects.create(
             sala=sala,
-            coord_x=coord_x,
-            coord_y=coord_y,
+            coord_x=int(coord_x),
+            coord_y=int(coord_y),
             disponivel=True,
             tem_maquina=True,
             tipo=PostoDeTrabalho.Tipo.INDIVIDUAL,
@@ -221,19 +211,97 @@ def processar_planta_baixa(imagem_bytes, sala_id):
         postos_criados.append(posto)
 
     logger.info(
-        'Planta processada: sala=%s, postos_detectados=%d, precisao=%.1f%%',
-        sala.nome, len(postos_criados), precisao
+        'Planta processada: sala=%s, postos_detectados=%d, confianca=%.1f%%',
+        sala.nome, len(postos_criados), confianca_media
     )
 
     return {
         'postos_criados': postos_criados,
         'total_detectado': len(postos_criados),
-        'precisao_estimada': precisao,
-        'alerta_precisao': precisao < 85,
+        'confianca_media': confianca_media,
+        'alerta_revisao': confianca_media < 75,
     }
 
 
+def _detectar_por_template(gray, h_img, w_img):
+    regioes_template = [
+        (0.06, 0.87),
+        (0.11, 0.87),
+        (0.02, 0.67),
+        (0.62, 0.88),
+        (0.67, 0.88),
+        (0.71, 0.88),
+        (0.62, 0.95),
+        (0.93, 0.95),
+        (0.93, 0.85),
+    ]
+
+    margem_rel = 0.019
+    resultados = []
+
+    for rx, ry in regioes_template:
+        cx = int(rx * w_img)
+        cy = int(ry * h_img)
+        margem = int(margem_rel * min(h_img, w_img))
+
+        y1, y2 = max(0, cy - margem), min(h_img, cy + margem)
+        x1, x2 = max(0, cx - margem), min(w_img, cx + margem)
+        t = gray[y1:y2, x1:x2]
+
+        if t.shape[0] < 5 or t.shape[1] < 5:
+            continue
+
+        for escala in [0.85, 0.95, 1.0, 1.05, 1.15]:
+            ts = cv2.resize(t, (0, 0), fx=escala, fy=escala)
+            if ts.shape[0] < 5 or ts.shape[1] < 5:
+                continue
+            res = cv2.matchTemplate(gray, ts, cv2.TM_CCOEFF_NORMED)
+            loc = np.where(res >= 0.58)
+            th, tw = ts.shape[:2]
+            for px, py in zip(loc[1].tolist(), loc[0].tolist()):
+                score = float(res[py, px])
+                resultados.append((px + tw // 2, py + th // 2, score))
+
+    return resultados
+
+
+def _detectar_por_canny(gray, h_img, w_img):
+    blur = cv2.GaussianBlur(gray, (3, 3), 0)
+    thresh = cv2.adaptiveThreshold(
+        blur, 255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        blockSize=11,
+        C=2,
+    )
+    bordas = cv2.Canny(thresh, 50, 150)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+    bordas = cv2.dilate(bordas, kernel, iterations=1)
+    contornos, _ = cv2.findContours(bordas, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    area_min = h_img * w_img * 0.0001
+    area_max = h_img * w_img * 0.005
+    candidatos = []
+
+    for c in contornos:
+        area = cv2.contourArea(c)
+        if area < area_min or area > area_max:
+            continue
+        x, y, w, h = cv2.boundingRect(c)
+        ratio = w / h if h > 0 else 0
+        if not (0.3 <= ratio <= 3.0):
+            continue
+        perim = cv2.arcLength(c, True)
+        approx = cv2.approxPolyDP(c, 0.04 * perim, True)
+        if 3 <= len(approx) <= 6:
+            candidatos.append((x + w // 2, y + h // 2))
+
+    return candidatos
+
+
 def _deduplicar_pontos(pontos, distancia_min=25):
+    if not pontos:
+        return []
     usados = [False] * len(pontos)
     resultado = []
     for i, (x1, y1) in enumerate(pontos):

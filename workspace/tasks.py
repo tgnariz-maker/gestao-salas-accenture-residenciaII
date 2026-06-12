@@ -27,8 +27,8 @@ def processar_planta_baixa_task(self, imagem_bytes_hex, sala_id):
             'status': 'completed',
             'postos': serializer.data,
             'total_detectado': resultado['total_detectado'],
-            'precisao_estimada': resultado['precisao_estimada'],
-            'alerta_precisao': resultado['alerta_precisao'],
+            'confianca_media': resultado['confianca_media'],
+            'alerta_revisao': resultado['alerta_revisao'],
         }
 
         cache.set(cache_key, payload, LAYOUT_CACHE_TTL)
