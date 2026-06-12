@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
-from .models import Usuario, Sala, Recurso, PostoDeTrabalho, Reserva, PerfilProfissional
+from .models import Usuario, Sala, Recurso, PostoDeTrabalho, Reserva, PerfilProfissional, Equipe
 
 
 class PerfilProfissionalSerializer(serializers.ModelSerializer):
@@ -38,6 +38,37 @@ class UsuarioCadastroSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         return Usuario.objects.create_user(**validated_data)
+
+
+class EquipeSerializer(serializers.ModelSerializer):
+    membros = UsuarioSerializer(many=True, read_only=True)
+    membros_ids = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Usuario.objects.all(),
+        source='membros',
+        write_only=True,
+        required=False,
+    )
+
+    class Meta:
+        model = Equipe
+        fields = ['id', 'nome', 'descricao', 'membros', 'membros_ids']
+        read_only_fields = ['id']
+
+    def create(self, validated_data):
+        membros = validated_data.pop('membros', [])
+        equipe = Equipe.objects.create(**validated_data)
+        equipe.membros.set(membros)
+        return equipe
+
+    def update(self, instance, validated_data):
+        membros = validated_data.pop('membros', None)
+        for campo, valor in validated_data.items():
+            setattr(instance, campo, valor)
+        instance.save()
+        if membros is not None:
+            instance.membros.set(membros)
+        return instance
 
 
 class RecursoSerializer(serializers.ModelSerializer):

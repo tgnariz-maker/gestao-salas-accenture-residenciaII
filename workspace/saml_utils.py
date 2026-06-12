@@ -34,20 +34,21 @@ def carregar_configuracao_saml():
                 'binding': 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect',
             },
             'x509cert': (
-                'MIICmzCCAYMCBgGemgPwSTANBgkqhkiG9w0BAQsFADARMQ8wDQYDVQQDDAZncm93'
-                'dXAwHhcNMjYwNjA1MjI1ODI5WhcNMzYwNjA1MjMwMDA5WjARMQ8wDQYDVQQDDAZn'
-                'cm93dXAwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCvhG6KHNJyLmyd'
-                '4uDcANvoLG1mpNjk/k9FDLm6djYORKmJnl/I/v/UkR8AtaPM3RTJvk8A971VXD8'
-                'cGMUs/w+eUHcKBDvCksSSGt+NkC4y9iNjEX5Z3k+KSX+P6PAf6zpZCMqhk7IVbq'
-                'S90TYCAU1g8xkKcYQh9CPf4bsRJlpTPVKL+7JAOlFeOgh5Ug5SREWFsjdEgfJxxt'
-                'q6QVAD27pOXk22HGvxLmEYuieOr4CcYcM1SW6YiVyiclg9+Pe1htHFrobfI1J3sI'
-                '5v6HLROd5YBw/U4k0Evo4YA30bN3aIlYjH7LpRxYj13/N6mJyvdCq27/xjd0WY8'
-                '3/e1DYqnebxAgMBAAEwDQYJKoZIhvcNAQELBQADggEBAGyn2M17kQHpsSlK/WPIo'
-                'uGVuob88lYkfrNrVjxlmxDcCD1QfyOXf4hZCHllPHy6dXdo7TO5WUafHFoakJHL+'
-                'yM9sfK0XJVcmoXuGyWRzxc5MTY1MKgE3PX93mUNTvkxSrk0c31dsTE3lgk6hP+pU'
-                'AlMc2sLKwIibgf+4ZqEExibJVpdB5KMlkls6GthTBNNnPa3/Y3eIfD/91tmXvOXv'
-                'onSoELvUCzlOFT2R+9OQA4NQ/4FM+t/Pwyd1i44F70zHM+t/KGFGwZm5RaFJA48'
-                'Ik/kWppVQrxLTx2ePmJp9lKje7Bm9GqldutzWIVlRq8fxftjGpoIT+4ERaPrAKBQlRM='
+                'MIICmzCCAYMCBgGeuXjnhTANBgkqhkiG9w0BAQsFADARMQ8wDQYDVQQDDAZncm93'
+                'dXAwHhcNMjYwNjEyMDEzNDI5WhcNMzYwNjEyMDEzNjA5WjARMQ8wDQYDVQQDDAZn'
+                'cm93dXAwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCkaM6epl40y5FA'
+                'MqcnYlh1n4SvnEmTCshyyjj+J1Ck4XMq8X10gq1Q4B/BAB1IKn+/fKSak6Z6ZGp'
+                'DNzzpSS5TXSBkrloy6LtczxUgn2MPe8yAkDJBuUvu7MxzBAVkI6m4MjEJN3V/a6'
+                'mN6AL0qwb9t8CTpF9q7B1R6Tq95qWds4lucQYQWWk1vfKZVuMh6IaDkwcgpG8li'
+                'ORG2wCdHdnm3zggBs+0A+1qG2Xt0ey3R/+Q7U8YeHzkxNov/1V1JtvzT5kKTsQ'
+                'Dg9rALjTopvhFPpKgsMGBOeY/bxsrWUGkVn/XlkSF1k1cs6xC6Di95cvklODVPW'
+                'vWcTUg+n6ie2MjAgMBAAEwDQYJKoZIhvcNAQELBQADggEBAKQ4Hdf/w8gEntgqX'
+                'q7hwEwUuc+aWkcrR9ex67b8ddPXgu1bPK8PbQQb1fOgfVu8s01jRFEw08GYhAxW'
+                'IRvC3nd2Ce3sz57Cu7wzsSm25OCqvQB9LXjTf9Ohi7wFtNykOyLYr2xUZZPVc7R'
+                'yiwLDu2wvl+5n4uYKtjwgkkvMJzUC7XJXFaWuKQ2DRwNKoJWjdSTztzJJrs4PX'
+                '7wRjGIKf1+qrZbbo7ICUaJGjd7kKxfrVf9E3P8qphCk6UoO6si1ErUHr81KK4x'
+                'KKiIKX3I7B5cJ1FA2cfWDIvmSGF3vNezXwNzrGpxbPfx/Dx6VPpsDcIyuGidb6'
+                'G9sSQmSp2H7ckA='
             ),
         },
     }

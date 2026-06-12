@@ -4,7 +4,7 @@ import logging
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.exceptions import ValidationError, PermissionDenied
-from .models import Sala, PostoDeTrabalho, Reserva, PerfilProfissional
+from .models import Sala, PostoDeTrabalho, Reserva, PerfilProfissional, Equipe
 from . import selectors
 
 logger = logging.getLogger('workspace')
@@ -44,6 +44,20 @@ def atualizar_perfil(usuario, dados):
             setattr(usuario, campo, dados[campo])
     usuario.save()
     return usuario
+
+
+def criar_equipe(dados):
+    from .serializers import EquipeSerializer
+    serializer = EquipeSerializer(data=dados)
+    serializer.is_valid(raise_exception=True)
+    return serializer.save()
+
+
+def atualizar_equipe(equipe, dados):
+    from .serializers import EquipeSerializer
+    serializer = EquipeSerializer(equipe, data=dados, partial=True)
+    serializer.is_valid(raise_exception=True)
+    return serializer.save()
 
 
 def criar_sala(dados):

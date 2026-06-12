@@ -15,6 +15,7 @@ from .serializers import (
     SalaListSerializer, SalaDetailSerializer, SalaEscritaSerializer,
     PostoDeTrabalhoSerializer, RecursoSerializer,
     ReservaLeituraSerializer, ReservaEscritaSerializer,
+    EquipeSerializer,
 )
 
 
@@ -188,13 +189,32 @@ class PostoSugestaoView(APIView):
 
 
 @extend_schema_view(
-    get=extend_schema(tags=['posicoes'], summary='Sugestões de posições por proximidade de equipe', responses=PostoDeTrabalhoSerializer),
+    get=extend_schema(
+        tags=['posicoes'],
+        summary='Sugestões de posições por necessidades coletivas da equipe',
+        responses=PostoDeTrabalhoSerializer,
+        parameters=[
+            {
+                'name': 'equipe_id',
+                'in': 'query',
+                'required': True,
+                'schema': {'type': 'integer'},
+                'description': 'ID da equipe para análise coletiva de necessidades',
+            }
+        ],
+    ),
 )
 class PostoSugestaoEquipeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        postos = selectors.get_sugestoes_por_equipe(request.user)
+        equipe_id = request.query_params.get('equipe_id')
+        if not equipe_id:
+            return Response(
+                {'erro': 'Parâmetro equipe_id é obrigatório.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        postos = selectors.get_sugestoes_por_equipe(request.user, int(equipe_id))
         serializer = PostoDeTrabalhoSerializer(postos, many=True)
         return Response(serializer.data)
 
@@ -353,3 +373,55 @@ class HealthView(APIView):
 
     def get(self, request):
         return Response({'status': 'ok'})
+
+
+@extend_schema_view(
+    get=extend_schema(tags=['equipes'], summary='Lista equipes', responses=EquipeSerializer),
+    post=extend_schema(tags=['equipes'], summary='Cria equipe', request=EquipeSerializer, responses=EquipeSerializer),
+)
+class EquipeListCreateView(APIView):
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [IsAdmin()]
+
+    def get(self, request):
+        equipes = selectors.get_todas_equipes()
+        serializer = EquipeSerializer(equipes, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        equipe = services.criar_equipe(request.data)
+        serializer = EquipeSerializer(equipe)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@extend_schema_view(
+    get=extend_schema(tags=['equipes'], summary='Detalha equipe', responses=EquipeSerializer),
+    patch=extend_schema(tags=['equipes'], summary='Atualiza equipe', request=EquipeSerializer, responses=EquipeSerializer),
+    delete=extend_schema(tags=['equipes'], summary='Remove equipe', responses={204: None}),
+)
+class EquipeDetailView(APIView):
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [IsAdmin()]
+
+    def get(self, request, pk):
+        from .models import Equipe
+        equipe = get_object_or_404(Equipe, pk=pk)
+        serializer = EquipeSerializer(equipe)
+        return Response(serializer.data)
+
+    def patch(self, request, pk):
+        from .models import Equipe
+        equipe = get_object_or_404(Equipe, pk=pk)
+        equipe = services.atualizar_equipe(equipe, request.data)
+        serializer = EquipeSerializer(equipe)
+        return Response(serializer.data)
+
+    def delete(self, request, pk):
+        from .models import Equipe
+        equipe = get_object_or_404(Equipe, pk=pk)
+        equipe.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

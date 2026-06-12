@@ -1,6 +1,6 @@
 import math
 from django.utils import timezone
-from .models import Usuario, Sala, Recurso, PostoDeTrabalho, Reserva, PerfilProfissional
+from .models import Usuario, Sala, Recurso, PostoDeTrabalho, Reserva, PerfilProfissional, Equipe
 
 
 def get_perfil_profissional_by_id(perfil_id):
@@ -82,40 +82,60 @@ def get_sugestoes_por_perfil(usuario):
     return qs.order_by('sala__nome', 'coord_x', 'coord_y')
 
 
-def get_sugestoes_por_equipe(usuario):
-    postos_compativeis = list(get_sugestoes_por_perfil(usuario))
+def get_todas_equipes():
+    return Equipe.objects.prefetch_related('membros').order_by('nome')
 
-    if not postos_compativeis:
+
+def get_equipe_by_id(equipe_id):
+    return Equipe.objects.prefetch_related('membros__perfil_profissional').get(id=equipe_id)
+
+
+def get_sugestoes_por_equipe(usuario, equipe_id):
+    equipe = get_equipe_by_id(equipe_id)
+    membros = list(equipe.membros.select_related('perfil_profissional').all())
+
+    if not membros:
         return PostoDeTrabalho.objects.none()
 
-    if not usuario.departamento:
-        return get_sugestoes_por_perfil(usuario)
+    postos_disponiveis = list(
+        PostoDeTrabalho.objects.filter(
+            disponivel=True,
+            sala__ativo=True,
+        ).select_related('sala')
+    )
 
-    agora = timezone.now()
-    proximos_7_dias = agora + timezone.timedelta(days=7)
+    if not postos_disponiveis:
+        return PostoDeTrabalho.objects.none()
 
-    reservas_equipe = Reserva.objects.filter(
-        usuario__departamento=usuario.departamento,
-        status=Reserva.Status.CONFIRMADA,
-        data_hora_inicio__gte=agora,
-        data_hora_inicio__lte=proximos_7_dias,
-    ).exclude(usuario=usuario).select_related('posto')
+    def posto_atende_membro(posto, membro):
+        perfil = membro.perfil_profissional
+        if not perfil or not perfil.tipos_recurso_necessarios:
+            return True
+        if 'COMPUTADOR' in perfil.tipos_recurso_necessarios:
+            return posto.tem_maquina
+        return True
 
-    if not reservas_equipe.exists():
-        return get_sugestoes_por_perfil(usuario)
+    def score_posto(posto):
+        membros_atendidos = sum(1 for m in membros if posto_atende_membro(posto, m))
+        return membros_atendidos
 
-    coords_equipe = [(r.posto.coord_x, r.posto.coord_y) for r in reservas_equipe]
+    postos_com_score = sorted(postos_disponiveis, key=score_posto, reverse=True)
 
-    def distancia_minima(posto):
-        return min(
-            math.sqrt((posto.coord_x - cx) ** 2 + (posto.coord_y - cy) ** 2)
-            for cx, cy in coords_equipe
-        )
+    melhor_score = score_posto(postos_com_score[0]) if postos_com_score else 0
+    postos_filtrados = [p for p in postos_com_score if score_posto(p) == melhor_score]
 
-    postos_ordenados = sorted(postos_compativeis, key=distancia_minima)
-    ids_ordenados = [p.id for p in postos_ordenados]
-    postos_por_id = {p.id: p for p in postos_compativeis}
-    return [postos_por_id[i] for i in ids_ordenados]
+    if len(postos_filtrados) > 1:
+        def proximidade(posto):
+            outros = [p for p in postos_filtrados if p.id != posto.id]
+            if not outros:
+                return 0
+            return sum(
+                math.sqrt((posto.coord_x - p.coord_x) ** 2 + (posto.coord_y - p.coord_y) ** 2)
+                for p in outros
+            )
+        postos_filtrados = sorted(postos_filtrados, key=proximidade)
+
+    return postos_filtrados[:len(membros)]
 
 
 def get_recursos_by_sala(sala_id):

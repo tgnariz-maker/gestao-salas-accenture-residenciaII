@@ -192,3 +192,16 @@ class Reserva(models.Model):
 
     def __str__(self):
         return f'Reserva {self.usuario.username} — {self.posto}'
+
+
+class Equipe(models.Model):
+    nome = models.CharField(max_length=100, unique=True)
+    descricao = models.TextField(blank=True)
+    membros = models.ManyToManyField(
+        Usuario,
+        related_name='equipes',
+        blank=True,
+    )
+
+    def __str__(self):
+        return self.nome
