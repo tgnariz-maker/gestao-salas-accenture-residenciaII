@@ -7,6 +7,7 @@ from .views import (
     RecursoListView,
     ReservaListCreateView, ReservaCancelView, ReservaHistoricoView,
     IAMapearView, IARotularPostoView, IAEditarLayoutView,
+    IALayoutPreviewView, IALayoutConfirmarView,
     EquipeListCreateView, EquipeDetailView,
     HealthView,
 )
@@ -28,6 +29,8 @@ urlpatterns = [
     path('salas/<int:pk>/status/', SalaStatusView.as_view(), name='salas-status'),
     path('salas/<int:pk>/posicoes/', PostoListView.as_view(), name='posicoes-list'),
     path('salas/<int:pk>/recursos/', RecursoListView.as_view(), name='recursos-list'),
+    path('salas/<int:pk>/layout-preview/', IALayoutPreviewView.as_view(), name='ia-layout-preview'),
+    path('salas/<int:pk>/layout/', IALayoutConfirmarView.as_view(), name='ia-layout-confirmar'),
 
     path('posicoes/sugestoes/', PostoSugestaoView.as_view(), name='posicoes-sugestoes'),
     path('posicoes/sugestoes/equipe/', PostoSugestaoEquipeView.as_view(), name='posicoes-sugestoes-equipe'),

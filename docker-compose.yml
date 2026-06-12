@@ -27,6 +27,14 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
     command: start-dev
@@ -59,6 +67,7 @@ services:
     env_file: .env
     environment:
       DB_HOST: db
+      CELERY_BROKER_URL: redis://redis:6379/0
     ports:
       - "8000:8000"
     volumes:
@@ -68,9 +77,26 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     command: >
       sh -c "python manage.py migrate --no-input &&
              gunicorn core.wsgi:application --bind 0.0.0.0:8000 --workers 2"
+
+  celery_worker:
+    build: .
+    env_file: .env
+    environment:
+      DB_HOST: db
+      CELERY_BROKER_URL: redis://redis:6379/0
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A core worker --loglevel=info --concurrency=2
 
 volumes:
   postgres_data:

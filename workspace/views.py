@@ -284,8 +284,8 @@ class ReservaHistoricoView(APIView):
 
 @extend_schema(
     tags=['ia'],
-    summary='Processa planta baixa e mapeia posições de trabalho',
-    description='Recebe imagem de planta baixa e sala_id. A IA detecta posições via OpenCV e persiste no banco.',
+    summary='Dispara mapeamento assíncrono de planta baixa',
+    description='Recebe imagem de planta baixa e sala_id. O processamento ocorre em background via Celery. Consulte o resultado em GET /api/v1/salas/{id}/layout-preview.',
     request={
         'multipart/form-data': {
             'type': 'object',
@@ -296,13 +296,15 @@ class ReservaHistoricoView(APIView):
             'required': ['imagem', 'sala_id'],
         }
     },
-    responses={201: PostoDeTrabalhoSerializer(many=True)},
+    responses={202: {'type': 'object', 'properties': {'mensagem': {'type': 'string'}, 'sala_id': {'type': 'integer'}}}},
 )
 class IAMapearView(APIView):
     permission_classes = [IsAdmin]
     parser_classes = [MultiPartParser]
 
     def post(self, request):
+        from .tasks import processar_planta_baixa_task
+
         imagem = request.FILES.get('imagem')
         sala_id = request.data.get('sala_id')
 
@@ -312,23 +314,68 @@ class IAMapearView(APIView):
             return Response({'erro': 'Campo sala_id é obrigatório.'}, status=status.HTTP_400_BAD_REQUEST)
 
         imagem_bytes = imagem.read()
-        resultado = services.processar_planta_baixa(imagem_bytes, int(sala_id))
+        imagem_hex = imagem_bytes.hex()
 
-        serializer = PostoDeTrabalhoSerializer(resultado['postos_criados'], many=True)
+        processar_planta_baixa_task.delay(imagem_hex, int(sala_id))
 
-        resposta = {
-            'postos': serializer.data,
-            'total_detectado': resultado['total_detectado'],
-            'precisao_estimada': resultado['precisao_estimada'],
-        }
+        return Response(
+            {'mensagem': 'Processamento iniciado.', 'sala_id': int(sala_id)},
+            status=status.HTTP_202_ACCEPTED,
+        )
 
-        if resultado['alerta_precisao']:
-            resposta['alerta'] = (
-                f'Precisão estimada de {resultado["precisao_estimada"]}% está abaixo de 85%. '
-                'Revise os postos manualmente via PATCH /api/v1/ia/posicoes/{id}/rotular/.'
+
+@extend_schema(
+    tags=['ia'],
+    summary='Consulta resultado do mapeamento assíncrono',
+    responses={200: {'type': 'object'}},
+)
+class IALayoutPreviewView(APIView):
+    permission_classes = [IsAdmin]
+
+    def get(self, request, pk):
+        from django.core.cache import cache
+        cache_key = f'layout_preview:{pk}'
+        resultado = cache.get(cache_key)
+
+        if not resultado:
+            return Response(
+                {'status': 'pending', 'mensagem': 'Processamento ainda não iniciado ou expirado.'},
+                status=status.HTTP_200_OK,
             )
 
-        return Response(resposta, status=status.HTTP_201_CREATED)
+        return Response(resultado)
+
+
+@extend_schema(
+    tags=['ia'],
+    summary='Confirma ou ajusta layout gerado pela IA',
+    request=PostoDeTrabalhoSerializer,
+    responses={200: PostoDeTrabalhoSerializer},
+)
+class IALayoutConfirmarView(APIView):
+    permission_classes = [IsAdmin]
+
+    def put(self, request, pk):
+        get_object_or_404(Sala, pk=pk)
+        postos_data = request.data.get('postos', [])
+
+        if not postos_data:
+            return Response({'erro': 'Campo postos é obrigatório.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        postos_atualizados = []
+        for posto_data in postos_data:
+            posto_id = posto_data.get('id')
+            if not posto_id:
+                continue
+            posto = get_object_or_404(PostoDeTrabalho, pk=posto_id, sala_id=pk)
+            for campo in ['coord_x', 'coord_y', 'tipo', 'tem_maquina', 'disponivel']:
+                if campo in posto_data:
+                    setattr(posto, campo, posto_data[campo])
+            posto.save()
+            postos_atualizados.append(posto)
+
+        serializer = PostoDeTrabalhoSerializer(postos_atualizados, many=True)
+        return Response(serializer.data)
 
 
 @extend_schema(
