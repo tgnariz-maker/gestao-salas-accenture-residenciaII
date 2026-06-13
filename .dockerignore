@@ -13,7 +13,6 @@ build/
 .gitignore
 logs/
 *.log
-tests/
 README.md
 CONTEXTO.md
 ONBOARDING.md
