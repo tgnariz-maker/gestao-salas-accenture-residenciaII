@@ -4,7 +4,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
+from drf_spectacular.types import OpenApiTypes
 
 from . import selectors, services
 from .models import Sala, PostoDeTrabalho, Reserva, PerfilProfissional
@@ -150,6 +151,73 @@ class SalaStatusView(APIView):
         return Response(SalaDetailSerializer(sala).data)
 
 
+@extend_schema(
+    tags=['salas'],
+    summary='Consulta disponibilidade de posições por data',
+    parameters=[
+        OpenApiParameter(
+            name='data',
+            type=OpenApiTypes.DATE,
+            location=OpenApiParameter.QUERY,
+            required=True,
+            description='Data no formato YYYY-MM-DD',
+        )
+    ],
+    responses={200: {'type': 'object'}},
+)
+class SalaDisponibilidadeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        data_str = request.query_params.get('data')
+        if not data_str:
+            return Response(
+                {'erro': 'Parâmetro data é obrigatório. Formato: YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            from datetime import date
+            data = date.fromisoformat(data_str)
+        except ValueError:
+            return Response(
+                {'erro': 'Formato de data inválido. Use YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        resultado = selectors.get_disponibilidade_sala(pk, data)
+        return Response(resultado)
+
+
+@extend_schema_view(
+    get=extend_schema(tags=['salas'], summary='Consulta configuração da sala', responses=ConfiguracaoSalaSerializer),
+    put=extend_schema(tags=['salas'], summary='Cria ou atualiza configuração da sala', request=ConfiguracaoSalaSerializer, responses=ConfiguracaoSalaSerializer),
+)
+class SalaConfiguracaoView(APIView):
+    permission_classes = [IsAdmin]
+
+    def get(self, request, pk):
+        sala = get_object_or_404(Sala, pk=pk, ativo=True)
+        try:
+            config = sala.configuracao
+            serializer = ConfiguracaoSalaSerializer(config)
+            return Response(serializer.data)
+        except Exception:
+            return Response(
+                {'mensagem': 'Configuração não definida. Use PUT para criar.'},
+                status=status.HTTP_200_OK,
+            )
+
+    def put(self, request, pk):
+        sala = get_object_or_404(Sala, pk=pk, ativo=True)
+        try:
+            config = sala.configuracao
+            serializer = ConfiguracaoSalaSerializer(config, data=request.data, partial=True)
+        except Exception:
+            serializer = ConfiguracaoSalaSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        config = serializer.save(sala=sala)
+        return Response(ConfiguracaoSalaSerializer(config).data)
+
+
 @extend_schema_view(
     get=extend_schema(tags=['posicoes'], summary='Lista posições de uma sala', responses=PostoDeTrabalhoSerializer),
 )
@@ -188,21 +256,19 @@ class PostoSugestaoView(APIView):
         return Response(serializer.data)
 
 
-@extend_schema_view(
-    get=extend_schema(
-        tags=['posicoes'],
-        summary='Sugestões de posições por necessidades coletivas da equipe',
-        responses=PostoDeTrabalhoSerializer,
-        parameters=[
-            {
-                'name': 'equipe_id',
-                'in': 'query',
-                'required': True,
-                'schema': {'type': 'integer'},
-                'description': 'ID da equipe para análise coletiva de necessidades',
-            }
-        ],
-    ),
+@extend_schema(
+    tags=['posicoes'],
+    summary='Sugestões de posições por necessidades coletivas da equipe',
+    parameters=[
+        OpenApiParameter(
+            name='equipe_id',
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            required=True,
+            description='ID da equipe para análise coletiva de necessidades',
+        )
+    ],
+    responses=PostoDeTrabalhoSerializer,
 )
 class PostoSugestaoEquipeView(APIView):
     permission_classes = [IsAuthenticated]
@@ -315,7 +381,6 @@ class IAMapearView(APIView):
 
         imagem_bytes = imagem.read()
         imagem_hex = imagem_bytes.hex()
-
         processar_planta_baixa_task.delay(imagem_hex, int(sala_id))
 
         return Response(
@@ -336,13 +401,11 @@ class IALayoutPreviewView(APIView):
         from django.core.cache import cache
         cache_key = f'layout_preview:{pk}'
         resultado = cache.get(cache_key)
-
         if not resultado:
             return Response(
                 {'status': 'pending', 'mensagem': 'Processamento ainda não iniciado ou expirado.'},
                 status=status.HTTP_200_OK,
             )
-
         return Response(resultado)
 
 
@@ -358,7 +421,6 @@ class IALayoutConfirmarView(APIView):
     def put(self, request, pk):
         get_object_or_404(Sala, pk=pk)
         postos_data = request.data.get('postos', [])
-
         if not postos_data:
             return Response({'erro': 'Campo postos é obrigatório.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -472,72 +534,3 @@ class EquipeDetailView(APIView):
         equipe = get_object_or_404(Equipe, pk=pk)
         equipe.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-@extend_schema(
-    tags=['salas'],
-    summary='Consulta disponibilidade de posições por data',
-    parameters=[
-        {
-            'name': 'data',
-            'in': 'query',
-            'required': True,
-            'schema': {'type': 'string', 'format': 'date'},
-            'description': 'Data no formato YYYY-MM-DD',
-        }
-    ],
-    responses={200: {'type': 'object'}},
-)
-class SalaDisponibilidadeView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, pk):
-        data_str = request.query_params.get('data')
-        if not data_str:
-            return Response(
-                {'erro': 'Parâmetro data é obrigatório. Formato: YYYY-MM-DD'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        try:
-            from datetime import date
-            data = date.fromisoformat(data_str)
-        except ValueError:
-            return Response(
-                {'erro': 'Formato de data inválido. Use YYYY-MM-DD'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        resultado = selectors.get_disponibilidade_sala(pk, data)
-        return Response(resultado)
-
-
-@extend_schema_view(
-    get=extend_schema(tags=['salas'], summary='Consulta configuração da sala', responses=ConfiguracaoSalaSerializer),
-    put=extend_schema(tags=['salas'], summary='Cria ou atualiza configuração da sala', request=ConfiguracaoSalaSerializer, responses=ConfiguracaoSalaSerializer),
-)
-class SalaConfiguracaoView(APIView):
-    permission_classes = [IsAdmin]
-
-    def get(self, request, pk):
-        sala = get_object_or_404(Sala, pk=pk, ativo=True)
-        try:
-            config = sala.configuracao
-            serializer = ConfiguracaoSalaSerializer(config)
-            return Response(serializer.data)
-        except Exception:
-            return Response(
-                {'mensagem': 'Configuração não definida. Use PUT para criar.'},
-                status=status.HTTP_200_OK,
-            )
-
-    def put(self, request, pk):
-        sala = get_object_or_404(Sala, pk=pk, ativo=True)
-        try:
-            config = sala.configuracao
-            serializer = ConfiguracaoSalaSerializer(config, data=request.data, partial=True)
-        except Exception:
-            serializer = ConfiguracaoSalaSerializer(data=request.data)
-
-        serializer.is_valid(raise_exception=True)
-        config = serializer.save(sala=sala)
-        return Response(ConfiguracaoSalaSerializer(config).data)
