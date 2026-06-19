@@ -105,7 +105,7 @@ class Sala(models.Model):
 
     nome = models.CharField(max_length=100)
     localizacao = models.CharField(max_length=100)
-    capacidade = models.IntegerField(validators=[MinValueValidator(1)])
+    capacidade = models.IntegerField(null=True, blank=True, validators=[MinValueValidator(1)])
     status = models.CharField(
         max_length=20,
         choices=Status.choices,

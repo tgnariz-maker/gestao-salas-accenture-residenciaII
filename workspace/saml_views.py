@@ -6,6 +6,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from onelogin.saml2.auth import OneLogin_Saml2_Auth
 from django.conf import settings
+from django.http import HttpResponseRedirect
 
 from .models import Usuario, PerfilProfissional
 from .saml_utils import preparar_request_saml, carregar_configuracao_saml
@@ -107,11 +108,5 @@ class SAMLACSView(APIView):
             )
 
         logger.info('Login SAML concluído para "%s"', username)
-
-        return Response({
-            'mensagem': 'Login realizado com sucesso.',
-            'usuario': username,
-            'access_token': token_data.get('access_token'),
-            'expires_in': token_data.get('expires_in'),
-            'token_type': token_data.get('token_type', 'Bearer'),
-        })
+        frontend_url = f'http://localhost:5173?token={token_data.get("access_token")}'
+        return HttpResponseRedirect(frontend_url)

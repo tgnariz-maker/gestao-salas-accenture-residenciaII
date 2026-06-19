@@ -159,6 +159,8 @@ class SalaDetailSerializer(serializers.ModelSerializer):
 
 
 class SalaEscritaSerializer(serializers.ModelSerializer):
+    capacidade = serializers.IntegerField(required=False, allow_null=True, min_value=1)
+
     class Meta:
         model = Sala
         fields = [

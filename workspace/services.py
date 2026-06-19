@@ -209,6 +209,8 @@ def processar_planta_baixa(imagem_bytes, sala_id):
             tipo=PostoDeTrabalho.Tipo.INDIVIDUAL,
         )
         postos_criados.append(posto)
+        sala.capacidade = len(postos_criados)
+        sala.save(update_fields=['capacidade'])
 
     logger.info(
         'Planta processada: sala=%s, postos_detectados=%d, confianca=%.1f%%',

@@ -99,6 +99,8 @@ def get_disponibilidade_sala(sala_id, data):
         'total_postos': todos_postos.count(),
         'postos_livres': postos_livres.count(),
         'postos_ocupados': postos_ocupados.count(),
+        'ids_postos_livres': list(postos_livres.values_list('id', flat=True)),
+        'ids_postos_ocupados': list(postos_ocupados.values_list('id', flat=True)),
     }
 
 
