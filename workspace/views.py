@@ -222,13 +222,31 @@ class SalaConfiguracaoView(APIView):
     get=extend_schema(tags=['posicoes'], summary='Lista posições de uma sala', responses=PostoDeTrabalhoSerializer),
 )
 class PostoListView(APIView):
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [IsAdmin()]
 
     def get(self, request, pk):
-        get_object_or_404(Sala, pk=pk)
+        get_object_or_404(Sala, pk=pk, ativo=True)
         postos = selectors.get_postos_by_sala(pk)
         serializer = PostoDeTrabalhoSerializer(postos, many=True)
         return Response(serializer.data)
+
+    def post(self, request, pk):
+        from .models import PostoDeTrabalho as PDT
+        sala = get_object_or_404(Sala, pk=pk, ativo=True)
+        posto = PDT.objects.create(
+            sala=sala,
+            coord_x=request.data.get('coord_x', 0),
+            coord_y=request.data.get('coord_y', 0),
+            tipo=request.data.get('tipo', PDT.Tipo.INDIVIDUAL),
+            tem_maquina=request.data.get('tem_maquina', True),
+            disponivel=True,
+        )
+        sala.capacidade = PDT.objects.filter(sala=sala).count()
+        sala.save(update_fields=['capacidade'])
+        return Response(PostoDeTrabalhoSerializer(posto).data, status=status.HTTP_201_CREATED)
 
 
 @extend_schema_view(

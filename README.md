@@ -43,34 +43,7 @@ cd gestao-salas-accenture-residenciaII
 cp .env.example .env
 ```
 
-Preencha o `.env`:
-
-```env
-SECRET_KEY=django-insecure-substitua-por-chave-forte
-DEBUG=True
-ALLOWED_HOSTS=localhost,127.0.0.1,web
-
-DB_NAME=room_db
-DB_USER=postgres
-DB_PASSWORD=postgres
-DB_HOST=db
-DB_PORT=5432
-
-CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
-
-SAML_IDP_URL=http://localhost:8080/realms/growup
-SAML_ENTITY_ID=growup
-SAML_ACS_URL=http://localhost:8000/api/v1/saml/acs/
-
-KEYCLOAK_INTERNAL_URL=http://keycloak:8080/realms/growup
-KEYCLOAK_JWKS_URL=http://localhost:8080/realms/growup/protocol/openid-connect/certs
-KEYCLOAK_JWKS_URL_INTERNAL=http://keycloak:8080/realms/growup/protocol/openid-connect/certs
-KEYCLOAK_OIDC_CLIENT_ID=growup-api
-KEYCLOAK_OIDC_CLIENT_SECRET=<client_secret_do_keycloak>
-KEYCLOAK_USERS_PASSWORD=admin123
-
-CELERY_BROKER_URL=redis://redis:6379/0
-```
+Preencha o `.env` com os valores do seu ambiente. Os campos obrigatórios são `SECRET_KEY`, `KEYCLOAK_OIDC_CLIENT_SECRET`, `SAML_X509_CERT` e `KEYCLOAK_USERS_PASSWORD`.
 
 ### 3. Subir os containers
 
@@ -79,6 +52,8 @@ docker compose up --build -d
 ```
 
 Isso sobe 5 containers: `db`, `db_keycloak`, `keycloak`, `web` e `celery_worker`.
+
+> O Keycloak leva aproximadamente 60 segundos para inicializar. O container `web` aguarda automaticamente via healthcheck.
 
 ### 4. Configurar o Keycloak
 
@@ -101,14 +76,16 @@ Acesse `http://localhost:8080` com `admin / admin` e configure:
 - Copiar o Client secret → preencher `KEYCLOAK_OIDC_CLIENT_SECRET` no `.env`
 
 **Usuários de teste:**
-- `admin_growup` / `admin123` — email: `admin@growup.com`
-- `felipe_growup` / `felipe123` — email: `felipe@growup.com`
+- `admin_growup` / senha definida em `KEYCLOAK_USERS_PASSWORD` — email: `admin@growup.com`
+- `felipe_growup` / senha definida em `KEYCLOAK_USERS_PASSWORD` — email: `felipe@growup.com`
 
 **Certificado X509:**
 - Realm settings → Keys → RS256 → Certificate
-- Copiar o valor e atualizar `x509cert` em `workspace/saml_utils.py`
+- Copiar o valor e preencher `SAML_X509_CERT` no `.env`
 
-### 5. Reconstruir após atualizar o certificado
+> O certificado muda a cada `docker compose down -v`. Em desenvolvimento, evite usar `-v`.
+
+### 5. Reconstruir após atualizar o .env
 
 ```bash
 docker compose up --build -d
@@ -138,7 +115,7 @@ O sistema usa SAML via Keycloak. O fluxo é:
 
 1. Acesse `GET /api/v1/saml/login/` — redireciona para o Keycloak
 2. Faça login com as credenciais do usuário de teste
-3. O ACS retorna um `access_token`
+3. O ACS retorna um `access_token` e redireciona para o frontend
 4. Use o token no header: `Authorization: Bearer <access_token>`
 5. No Swagger, clique em **Authorize** e cole o token
 
@@ -153,7 +130,7 @@ docker compose up --build -d
 # Parar containers (preserva volumes)
 docker compose down
 
-# Parar containers e apagar volumes do Django (Keycloak preservado)
+# Parar containers e apagar volumes do Django (Keycloak perde configuração)
 docker compose down -v
 
 # Logs da API
@@ -171,6 +148,16 @@ docker compose exec web pytest
 
 # Seed
 docker compose exec web python manage.py seed
+
+# Arquivos estáticos (necessário antes do deploy em produção)
+docker compose exec web python manage.py collectstatic --no-input
+
+# Copiar migration gerada no container para o projeto local (Windows)
+[System.IO.File]::WriteAllText(
+    "workspace\migrations\NOME_DA_MIGRATION.py",
+    (docker compose exec web cat workspace/migrations/NOME_DA_MIGRATION.py),
+    [System.Text.Encoding]::UTF8
+)
 ```
 
 ---
@@ -204,6 +191,7 @@ PROJETO_RESIDENCY/
 ├── logs/
 │   ├── .gitkeep
 │   └── growup.log        # Gerado em runtime — não versionar
+├── staticfiles/          # Gerado por collectstatic — não versionar
 ├── tests/
 │   ├── __init__.py
 │   ├── conftest.py       # Fixtures de autenticação e setup
@@ -223,7 +211,9 @@ PROJETO_RESIDENCY/
 │   │   ├── 0005_postodetrabalho_tem_maquina...
 │   │   ├── 0006_alter_postodetrabalho_tipo.py
 │   │   ├── 0007_alter_postodetrabalho_tipo_confi...
-│   │   └── 0008_alter_configuracaosala_dias_func...
+│   │   ├── 0008_alter_configuracaosala_dias_func...
+│   │   ├── 0009_alter_configuracaosala_dias_func...
+│   │   └── 0010_alter_configuracaosala_dias_func...
 │   ├── __init__.py
 │   ├── admin.py
 │   ├── apps.py

@@ -171,19 +171,11 @@ class SalaEscritaSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id']
 
-    def validate(self, data):
-        status = data.get('status', getattr(self.instance, 'status', None))
-
-        if status == Sala.Status.MANUTENCAO:
-            motivo = data.get('motivo_manutencao', getattr(self.instance, 'motivo_manutencao', ''))
-            prazo = data.get('prazo_estimado', getattr(self.instance, 'prazo_estimado', None))
-
-            if not motivo:
-                raise serializers.ValidationError({'motivo_manutencao': 'Obrigatório quando status é Manutenção.'})
-            if not prazo:
-                raise serializers.ValidationError({'prazo_estimado': 'Obrigatório quando status é Manutenção.'})
-
-        return data
+    def to_internal_value(self, data):
+        data = data.copy()
+        if 'capacidade' in data and data['capacidade'] == '':
+            data['capacidade'] = None
+        return super().to_internal_value(data)
 
 
 class PostoDeTrabalhoSerializer(serializers.ModelSerializer):

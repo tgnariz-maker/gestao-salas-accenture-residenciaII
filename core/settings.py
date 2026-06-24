@@ -93,7 +93,10 @@ SAML_FOLDER = BASE_DIR / 'saml'
 
 SAML_IDP_URL = config('SAML_IDP_URL', default='http://localhost:8080/realms/growup')
 SAML_ENTITY_ID = config('SAML_ENTITY_ID', default='growup')
-SAML_ACS_URL = config('SAML_ACS_URL', default='http://localhost:8000/api/saml/acs/')
+SAML_ACS_URL = config('SAML_ACS_URL', default='http://localhost:8000/api/v1/saml/acs/')
+SAML_X509_CERT = config('SAML_X509_CERT', default='')
+
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
 
 KEYCLOAK_JWKS_URL = config(
     'KEYCLOAK_JWKS_URL',
@@ -150,6 +153,8 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGGING = {

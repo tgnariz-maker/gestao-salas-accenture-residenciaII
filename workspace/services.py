@@ -40,7 +40,19 @@ def criar_usuario(dados):
 def atualizar_perfil(usuario, dados):
     campos_permitidos = ['first_name', 'last_name', 'departamento', 'perfil_profissional']
     for campo in campos_permitidos:
-        if campo in dados:
+        if campo not in dados:
+            continue
+        if campo == 'perfil_profissional':
+            perfil_id = dados[campo]
+            if perfil_id is None:
+                setattr(usuario, campo, None)
+            else:
+                try:
+                    perfil = PerfilProfissional.objects.get(pk=perfil_id)
+                    setattr(usuario, campo, perfil)
+                except PerfilProfissional.DoesNotExist:
+                    raise ValidationError({'perfil_profissional': 'Perfil profissional não encontrado.'})
+        else:
             setattr(usuario, campo, dados[campo])
     usuario.save()
     return usuario
@@ -173,13 +185,16 @@ def processar_planta_baixa(imagem_bytes, sala_id):
     if media_brilho > 127:
         gray = cv2.bitwise_not(gray)
 
-    margem_borda = int(min(h_img, w_img) * 0.04)
+    margem_borda = int(min(h_img, w_img) * 0.01)
 
-    candidatos_tm = _detectar_por_template(gray, h_img, w_img)
-    candidatos_canny = _detectar_por_canny(gray, h_img, w_img)
+    mesas = _detectar_mesas(gray, h_img, w_img)
+    logger.info('Mesas detectadas para exclusão: %d', len(mesas))
+    candidatos_canny = _detectar_por_canny(gray, h_img, w_img, mesas=mesas)
 
-    todos_coords = [(x, y) for x, y, _ in candidatos_tm] + candidatos_canny
-    distancia_dedup = max(20, int(min(h_img, w_img) * 0.018))
+    todos_coords = candidatos_canny
+    # Deduplicação final — elimina postos sobrepostos (<=6px)
+    # A deduplicação principal ocorre por chave de 8px dentro de _detectar_por_canny
+    distancia_dedup = 6
     postos_coords = _deduplicar_pontos(todos_coords, distancia_min=distancia_dedup)
 
     postos_coords = [
@@ -194,13 +209,15 @@ def processar_planta_baixa(imagem_bytes, sala_id):
             'Verifique se a imagem é uma planta baixa válida.'
         )
 
-    scores_tm = [s for _, _, s in candidatos_tm]
-    confianca_media = round(float(np.mean(scores_tm)) * 100, 1) if scores_tm else 0.0
-    confianca_media = min(confianca_media, 100.0)
+    total = len(todos_coords)
+    confianca_media = round(min(total / max(total, 1), 1.0) * 100, 1) if total > 0 else 0.0
 
-    postos_criados = []
-    for coord_x, coord_y in postos_coords:
-        posto = PostoDeTrabalho.objects.create(
+    PostoDeTrabalho.objects.filter(sala=sala).delete()
+    sala.capacidade = None
+    sala.save(update_fields=['capacidade'])
+
+    postos_criados = PostoDeTrabalho.objects.bulk_create([
+        PostoDeTrabalho(
             sala=sala,
             coord_x=int(coord_x),
             coord_y=int(coord_y),
@@ -208,12 +225,14 @@ def processar_planta_baixa(imagem_bytes, sala_id):
             tem_maquina=True,
             tipo=PostoDeTrabalho.Tipo.INDIVIDUAL,
         )
-        postos_criados.append(posto)
-        sala.capacidade = len(postos_criados)
-        sala.save(update_fields=['capacidade'])
+        for coord_x, coord_y in postos_coords
+    ])
+
+    sala.capacidade = len(postos_criados)
+    sala.save(update_fields=['capacidade'])
 
     logger.info(
-        'Planta processada: sala=%s, postos_detectados=%d, confianca=%.1f%%',
+        'Planta processada: sala=%s, postos_detectados=%d, precisao=%.1f%%',
         sala.nome, len(postos_criados), confianca_media
     )
 
@@ -267,22 +286,75 @@ def _detectar_por_template(gray, h_img, w_img):
     return resultados
 
 
-def _detectar_por_canny(gray, h_img, w_img):
-    blur = cv2.GaussianBlur(gray, (3, 3), 0)
-    thresh = cv2.adaptiveThreshold(
-        blur, 255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY,
-        blockSize=11,
-        C=2,
-    )
-    bordas = cv2.Canny(thresh, 50, 150)
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-    bordas = cv2.dilate(bordas, kernel, iterations=1)
-    contornos, _ = cv2.findContours(bordas, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+def _detectar_mesas(gray, h_img, w_img):
+    """
+    Detecta o interior das mesas para excluir elementos internos (monitores, etc).
+    Usa o bounding rect encolhido de cada mesa — exclui apenas o núcleo central,
+    preservando cadeiras que ficam na borda externa.
+    """
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+    bordas = cv2.Canny(blur, 30, 100)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    bordas = cv2.dilate(bordas, kernel, iterations=2)
+    bordas = cv2.erode(bordas, kernel, iterations=1)
 
-    area_min = h_img * w_img * 0.0001
-    area_max = h_img * w_img * 0.005
+    contornos, _ = cv2.findContours(bordas, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+
+    area_min_mesa = h_img * w_img * 0.003
+    area_max_mesa = h_img * w_img * 0.10
+    # Tamanho mínimo estimado de cadeira — usamos para calcular margem de erosão
+    tamanho_cadeira = int(min(h_img, w_img) * 0.03)
+    mesas = []
+
+    vistos = set()
+    for c in sorted(contornos, key=cv2.contourArea, reverse=True):
+        area = cv2.contourArea(c)
+        if area < area_min_mesa or area > area_max_mesa:
+            continue
+        x, y, w, h = cv2.boundingRect(c)
+        ratio = w / h if h > 0 else 0
+        if not (0.15 <= ratio <= 8.0):
+            continue
+
+        # Deduplicar contornos muito próximos (mesa detectada múltiplas vezes)
+        chave = (x // 20, y // 20)
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+
+        # Margem adaptativa: no máximo 30% da dimensão da mesa
+        # Garante que mesas estreitas ainda tenham zona de exclusão válida
+        margem_x = min(tamanho_cadeira, int(w * 0.30))
+        margem_y = min(tamanho_cadeira, int(h * 0.30))
+        x1 = x + margem_x
+        y1 = y + margem_y
+        x2 = x + w - margem_x
+        y2 = y + h - margem_y
+        if x2 > x1 and y2 > y1:
+            # Expande x2 em 20% para cobrir conectores e elementos laterais da mesa
+            extra_x2 = int(w * 0.20)
+            mesas.append((x1, y1, x2 + extra_x2, y2))
+
+    return mesas
+
+
+def _ponto_dentro_de_mesa(cx, cy, mesas):
+    """Verifica se um ponto está dentro do interior encolhido de alguma mesa."""
+    for (x1, y1, x2, y2) in mesas:
+        if x1 <= cx <= x2 and y1 <= cy <= y2:
+            return True
+    return False
+
+
+def _detectar_por_canny(gray, h_img, w_img, mesas=None):
+    blur = cv2.GaussianBlur(gray, (3, 3), 0)
+    bordas = cv2.Canny(blur, 30, 100)
+    # RETR_LIST sem dilate — preserva contornos individuais
+    contornos, _ = cv2.findContours(bordas, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+
+    area_min = h_img * w_img * 0.00043
+    area_max = h_img * w_img * 0.008
+    vistos = set()
     candidatos = []
 
     for c in contornos:
@@ -295,10 +367,31 @@ def _detectar_por_canny(gray, h_img, w_img):
             continue
         perim = cv2.arcLength(c, True)
         approx = cv2.approxPolyDP(c, 0.04 * perim, True)
-        if 3 <= len(approx) <= 6:
-            candidatos.append((x + w // 2, y + h // 2))
+        if 3 <= len(approx) <= 12:
+            cx = x + w // 2
+            cy = y + h // 2
+            # Deduplicação por proximidade de 8px — elimina quasi-duplicatas do RETR_LIST
+            chave = (cx // 8, cy // 8)
+            if chave in vistos:
+                continue
+            vistos.add(chave)
+            if mesas and _ponto_dentro_de_mesa(cx, cy, mesas):
+                continue
+            candidatos.append((cx, cy))
 
-    return candidatos
+    # Filtro de solitude — remove candidatos sem vizinhos próximos
+    # Cadeiras de escritório sempre aparecem em grupos; elementos isolados são falsos positivos
+    distancia_grupo = int(min(h_img, w_img) * 0.08)
+    resultado = []
+    for i, (cx, cy) in enumerate(candidatos):
+        tem_vizinho = any(
+            abs(cx - ox) < distancia_grupo and abs(cy - oy) < distancia_grupo
+            for j, (ox, oy) in enumerate(candidatos) if i != j
+        )
+        if tem_vizinho:
+            resultado.append((cx, cy))
+
+    return resultado
 
 
 def _deduplicar_pontos(pontos, distancia_min=25):

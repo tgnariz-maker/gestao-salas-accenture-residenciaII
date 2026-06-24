@@ -106,7 +106,18 @@ def get_disponibilidade_sala(sala_id, data):
 
 def get_sugestoes_por_perfil(usuario):
     perfil = usuario.perfil_profissional
-    qs = PostoDeTrabalho.objects.filter(disponivel=True, sala__ativo=True).select_related('sala')
+    agora = timezone.now()
+
+    postos_ocupados_ids = Reserva.objects.filter(
+        status=Reserva.Status.CONFIRMADA,
+        data_hora_inicio__lte=agora,
+        data_hora_fim__gt=agora,
+    ).values_list('posto_id', flat=True)
+
+    qs = PostoDeTrabalho.objects.filter(
+        disponivel=True,
+        sala__ativo=True,
+    ).exclude(id__in=postos_ocupados_ids).select_related('sala')
 
     if not perfil or not perfil.tipos_recurso_necessarios:
         return qs.order_by('sala__nome', 'coord_x', 'coord_y')
@@ -136,11 +147,18 @@ def get_sugestoes_por_equipe(usuario, equipe_id):
     if not membros:
         return PostoDeTrabalho.objects.none()
 
+    agora = timezone.now()
+    postos_ocupados_ids = Reserva.objects.filter(
+        status=Reserva.Status.CONFIRMADA,
+        data_hora_inicio__lte=agora,
+        data_hora_fim__gt=agora,
+    ).values_list('posto_id', flat=True)
+
     postos_disponiveis = list(
         PostoDeTrabalho.objects.filter(
             disponivel=True,
             sala__ativo=True,
-        ).select_related('sala')
+        ).exclude(id__in=postos_ocupados_ids).select_related('sala')
     )
 
     if not postos_disponiveis:
