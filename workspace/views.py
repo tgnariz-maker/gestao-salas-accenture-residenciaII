@@ -502,6 +502,63 @@ class HealthView(APIView):
         return Response({'status': 'ok'})
 
 
+@extend_schema(
+    tags=['sistema'],
+    summary='Obtém token de acesso via usuário e senha',
+    description='Endpoint auxiliar para testes de API sem frontend. Use as credenciais criadas pelo seed.',
+    request={
+        'application/json': {
+            'type': 'object',
+            'properties': {
+                'username': {'type': 'string'},
+                'password': {'type': 'string'},
+            },
+            'required': ['username', 'password'],
+        }
+    },
+    responses={200: {'type': 'object', 'properties': {'access_token': {'type': 'string'}, 'token_type': {'type': 'string'}}}},
+)
+class TokenView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        import requests as http_requests
+        username = request.data.get('username')
+        password = request.data.get('password')
+
+        if not username or not password:
+            return Response({'erro': 'username e password são obrigatórios.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from django.conf import settings
+        token_url = f'{settings.KEYCLOAK_INTERNAL_URL}/protocol/openid-connect/token'
+
+        response = http_requests.post(
+            token_url,
+            data={
+                'client_id': settings.KEYCLOAK_OIDC_CLIENT_ID,
+                'client_secret': settings.KEYCLOAK_OIDC_CLIENT_SECRET,
+                'grant_type': 'password',
+                'username': username,
+                'password': password,
+                'scope': 'openid profile email',
+            },
+            timeout=10,
+        )
+
+        if response.status_code != 200:
+            return Response(
+                {'erro': 'Credenciais inválidas ou serviço de autenticação indisponível.'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        data = response.json()
+        return Response({
+            'access_token': data.get('access_token'),
+            'token_type': 'Bearer',
+            'expires_in': data.get('expires_in'),
+        })
+
+
 @extend_schema_view(
     get=extend_schema(tags=['equipes'], summary='Lista equipes', responses=EquipeSerializer),
     post=extend_schema(tags=['equipes'], summary='Cria equipe', request=EquipeSerializer, responses=EquipeSerializer),

@@ -11,6 +11,7 @@ from .views import (
     IALayoutPreviewView, IALayoutConfirmarView,
     EquipeListCreateView, EquipeDetailView,
     HealthView,
+    TokenView,
 )
 
 urlpatterns = [
@@ -46,4 +47,6 @@ urlpatterns = [
     path('ia/mapear/', IAMapearView.as_view(), name='ia-mapear'),
     path('ia/posicoes/<int:pk>/rotular/', IARotularPostoView.as_view(), name='ia-rotular-posicao'),
     path('ia/layout/<int:pk>/editar/', IAEditarLayoutView.as_view(), name='ia-editar-layout'),
+
+    path('auth/token/', TokenView.as_view(), name='auth-token'),
 ]
