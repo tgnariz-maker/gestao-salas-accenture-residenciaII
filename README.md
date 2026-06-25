@@ -1,6 +1,6 @@
 # GrowUp API
 
-Plataforma backend para gestão de espaços corporativos. Centraliza o controle de salas e postos de trabalho com mapeamento automático via IA e sugestão inteligente de posições.
+Plataforma para gestão de espaços corporativos. Centraliza o controle de salas e postos de trabalho com mapeamento automático via IA e sugestão inteligente de posições.
 
 **Cliente:** Accenture | **Squad:** 25 | **Residência:** II — UNIT/Porto Digital
 
@@ -15,6 +15,7 @@ Plataforma backend para gestão de espaços corporativos. Centraliza o controle 
 | Banco de dados | PostgreSQL 17 |
 | Autenticação | SAML via Keycloak |
 | IA | OpenCV + Celery + Redis |
+| Frontend | React + Vite |
 | Documentação | Swagger via drf-spectacular |
 | Testes | pytest-django + factory-boy |
 | Deploy | Docker |
@@ -51,7 +52,7 @@ Preencha o `.env` com os valores do seu ambiente. Os campos obrigatórios são `
 docker compose up --build -d
 ```
 
-Isso sobe 5 containers: `db`, `db_keycloak`, `keycloak`, `web` e `celery_worker`.
+Isso sobe 6 containers: `db`, `db_keycloak`, `keycloak`, `redis`, `web` e `celery_worker`.
 
 > O Keycloak leva aproximadamente 60 segundos para inicializar. O container `web` aguarda automaticamente via healthcheck.
 
@@ -106,18 +107,32 @@ docker compose exec web python manage.py seed
 | Swagger | http://localhost:8000/api/docs/ |
 | Keycloak | http://localhost:8080 |
 | Login SAML | http://localhost:8000/api/v1/saml/login/ |
+| Frontend | http://localhost:5173 |
 
 ---
 
 ## Autenticação
 
-O sistema usa SAML via Keycloak. O fluxo é:
+### Via SAML (uso com frontend)
 
-1. Acesse `GET /api/v1/saml/login/` — redireciona para o Keycloak
+1. Acesse `http://localhost:8000/api/v1/saml/login/` — redireciona para o Keycloak
 2. Faça login com as credenciais do usuário de teste
 3. O ACS retorna um `access_token` e redireciona para o frontend
 4. Use o token no header: `Authorization: Bearer <access_token>`
-5. No Swagger, clique em **Authorize** e cole o token
+
+### Via endpoint direto (uso com Swagger/Postman)
+
+```bash
+POST /api/v1/auth/token/
+Content-Type: application/json
+
+{
+  "username": "admin_growup",
+  "password": "sua_senha"
+}
+```
+
+A resposta retorna o `access_token`. No Swagger, clique em **Authorize** e cole o token.
 
 ---
 
@@ -149,15 +164,11 @@ docker compose exec web pytest
 # Seed
 docker compose exec web python manage.py seed
 
+# Limpar cache Redis
+docker compose exec redis redis-cli FLUSHDB
+
 # Arquivos estáticos (necessário antes do deploy em produção)
 docker compose exec web python manage.py collectstatic --no-input
-
-# Copiar migration gerada no container para o projeto local (Windows)
-[System.IO.File]::WriteAllText(
-    "workspace\migrations\NOME_DA_MIGRATION.py",
-    (docker compose exec web cat workspace/migrations/NOME_DA_MIGRATION.py),
-    [System.Text.Encoding]::UTF8
-)
 ```
 
 ---
@@ -180,7 +191,7 @@ docker compose exec web pytest
 ## Arquitetura
 
 ```
-PROJETO_RESIDENCY/
+gestao-salas-accenture-residenciaII/
 ├── core/
 │   ├── __init__.py       # Importa o app Celery
 │   ├── asgi.py
@@ -189,19 +200,11 @@ PROJETO_RESIDENCY/
 │   ├── urls.py           # Roteamento principal
 │   └── wsgi.py
 ├── logs/
-│   ├── .gitkeep
 │   └── growup.log        # Gerado em runtime — não versionar
 ├── staticfiles/          # Gerado por collectstatic — não versionar
-├── tests/
-│   ├── __init__.py
-│   ├── conftest.py       # Fixtures de autenticação e setup
-│   ├── factories.py      # Factories para criação de objetos nos testes
-│   ├── test_services.py  # Testes de models e regras de negócio
-│   └── test_views.py     # Testes de endpoints
 ├── workspace/
 │   ├── management/
 │   │   └── commands/
-│   │       ├── __init__.py
 │   │       └── seed.py       # Dados de demonstração
 │   ├── migrations/
 │   │   ├── 0001_initial.py
@@ -214,7 +217,6 @@ PROJETO_RESIDENCY/
 │   │   ├── 0008_alter_configuracaosala_dias_func...
 │   │   ├── 0009_alter_configuracaosala_dias_func...
 │   │   └── 0010_alter_configuracaosala_dias_func...
-│   ├── __init__.py
 │   ├── admin.py
 │   ├── apps.py
 │   ├── authentication.py # Validação Bearer token Keycloak
@@ -226,17 +228,16 @@ PROJETO_RESIDENCY/
 │   ├── saml_views.py     # Views de autenticação SAML
 │   ├── selectors.py      # Queries ao banco
 │   ├── serializers.py    # Validação e formatação
-│   ├── services.py       # Lógica de negócio
+│   ├── services.py       # Lógica de negócio + algoritmo OpenCV
 │   ├── tasks.py          # Tasks assíncronas (Celery)
 │   ├── urls.py           # Roteamento
 │   └── views.py          # Endpoints
-├── .dockerignore
-├── .env
+├── conftest.py
+├── factories.py
+├── test_services.py
+├── test_views.py
 ├── .env.example
-├── .gitignore
 ├── docker-compose.yml
-├── Dockerfile
-├── Makefile
 ├── manage.py
 ├── pyproject.toml
 ├── pytest.ini
@@ -252,10 +253,13 @@ PROJETO_RESIDENCY/
 | Método | Endpoint | Descrição |
 |---|---|---|
 | GET | /api/v1/saml/login/ | Login via SAML |
+| POST | /api/v1/auth/token/ | Obter token via usuário/senha (testes) |
+| GET | /api/v1/health/ | Status da API |
 | GET | /api/v1/salas/ | Lista salas |
 | POST | /api/v1/salas/ | Cria sala (Admin) |
 | GET | /api/v1/salas/{id}/disponibilidade/ | Disponibilidade por data |
 | GET | /api/v1/salas/{id}/layout-preview/ | Resultado do mapeamento IA |
+| POST | /api/v1/salas/{id}/posicoes/ | Adiciona posto manualmente (Admin) |
 | POST | /api/v1/ia/mapear/ | Mapeia planta baixa (assíncrono) |
 | GET | /api/v1/posicoes/sugestoes/ | Sugestão por perfil |
 | GET | /api/v1/posicoes/sugestoes/equipe/ | Sugestão por equipe |
