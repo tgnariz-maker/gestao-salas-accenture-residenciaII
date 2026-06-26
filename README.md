@@ -44,7 +44,33 @@ cd gestao-salas-accenture-residenciaII
 cp .env.example .env
 ```
 
-Preencha o `.env` com os valores do seu ambiente. Os campos obrigatórios são `SECRET_KEY`, `KEYCLOAK_OIDC_CLIENT_SECRET`, `SAML_X509_CERT` e `KEYCLOAK_USERS_PASSWORD`.
+Edite o `.env` com os valores do seu ambiente. A tabela abaixo descreve cada variável:
+
+| Variável | Descrição | Exemplo |
+|---|---|---|
+| `SECRET_KEY` | Chave criptográfica interna do Django. Gere com: `python -c "import secrets; print(secrets.token_urlsafe(50))"` | `3C-0DMy0...` |
+| `DEBUG` | `True` em desenvolvimento, `False` em produção | `True` |
+| `ALLOWED_HOSTS` | Hosts permitidos separados por vírgula | `localhost,127.0.0.1,web` |
+| `DB_NAME` | Nome do banco de dados da aplicação | `room_db` |
+| `DB_USER` | Usuário do PostgreSQL | `postgres` |
+| `DB_PASSWORD` | Senha do PostgreSQL | `postgres` |
+| `DB_HOST` | Host do banco (use `db` dentro do Docker) | `db` |
+| `DB_PORT` | Porta do PostgreSQL | `5432` |
+| `CORS_ALLOWED_ORIGINS` | Origens permitidas para o frontend | `http://localhost:5173` |
+| `SAML_IDP_URL` | URL do realm Keycloak | `http://localhost:8080/realms/growup` |
+| `SAML_ENTITY_ID` | Entity ID do cliente SAML no Keycloak | `growup` |
+| `SAML_ACS_URL` | URL do ACS (Assertion Consumer Service) | `http://localhost:8000/api/v1/saml/acs/` |
+| `SAML_X509_CERT` | Certificado X509 do Keycloak. Obtido em: Realm settings → Keys → RS256 → Certificate | `MIICmz...` |
+| `FRONTEND_URL` | URL do frontend para redirect pós-login SAML | `http://localhost:5173` |
+| `KEYCLOAK_INTERNAL_URL` | URL interna do Keycloak (usada pelo container web) | `http://keycloak:8080/realms/growup` |
+| `KEYCLOAK_JWKS_URL` | URL pública dos certificados JWKS do Keycloak | `http://localhost:8080/realms/growup/protocol/openid-connect/certs` |
+| `KEYCLOAK_JWKS_URL_INTERNAL` | URL interna dos certificados JWKS | `http://keycloak:8080/realms/growup/protocol/openid-connect/certs` |
+| `KEYCLOAK_OIDC_CLIENT_ID` | ID do cliente OIDC no Keycloak | `growup-api` |
+| `KEYCLOAK_OIDC_CLIENT_SECRET` | Client secret do cliente OIDC. Obtido em: Clients → growup-api → Credentials → Client Secret | `abc123...` |
+| `KEYCLOAK_USERS_PASSWORD` | Senha padrão dos usuários criados pelo seed | `sua_senha` |
+| `CELERY_BROKER_URL` | URL do Redis usado como broker do Celery | `redis://redis:6379/0` |
+
+> **Nota sobre a IA:** o módulo de visão computacional usa OpenCV localmente — não requer chave de API externa. As únicas integrações externas são o Keycloak (autenticação) e o Redis (processamento assíncrono), ambos configurados via variáveis acima.
 
 ### 3. Subir os containers
 
